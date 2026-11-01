@@ -1,0 +1,175 @@
+<div class="editor">
+  <header class="toolbar">
+    <a routerLink="/">← Parking areas</a>
+    <h1>{{ area?.name }}</h1>
+
+    <nav class="floors">
+      @for (level of floors; track $index) {
+        <button [class.active]="$index === floor" (click)="switchFloor($index)">Level {{ floorLetter($index) }}</button>
+      }
+      <button (click)="addFloor()">+</button>
+      @if (floors.length > 1) {
+        <button (click)="removeLastFloor()">−</button>
+      }
+    </nav>
+
+    <span class="hint">1 square = 0.5 m</span>
+    <button (click)="undo()" [disabled]="!canUndo">Undo</button>
+    <button (click)="redo()" [disabled]="!canRedo">Redo</button>
+    <div class="zoom">
+      <button (click)="zoomBy(-0.25)">−</button>
+      <span>{{ zoom * 100 }}%</span>
+      <button (click)="zoomBy(0.25)">+</button>
+    </div>
+    <button class="primary" (click)="save()">Save layout</button>
+  </header>
+
+  @if (message) {
+    <p class="message">{{ message }}</p>
+  }
+
+  <div class="columns">
+    <aside class="panel">
+      <h3>Drag onto the plan</h3>
+      @for (entry of palette; track entry.label) {
+        <div class="tool" draggable="true" (dragstart)="startPaletteDrag(entry, $event)" (dragend)="endPaletteDrag()">
+          <span class="swatch {{ (entry.type ?? entry.kind).toLowerCase() }}"></span>
+          <span>
+            {{ entry.label }}
+            <small>{{ entry.width }} × {{ entry.height }} m</small>
+          </span>
+        </div>
+      }
+
+      <h3>Background</h3>
+      <div class="pair">
+        <label>
+          Latitude
+          <input [value]="latitude ?? ''" placeholder="36.838" (change)="setCoordinate('latitude', $any($event.target).value)" />
+        </label>
+        <label>
+          Longitude
+          <input [value]="longitude ?? ''" placeholder="10.243" (change)="setCoordinate('longitude', $any($event.target).value)" />
+        </label>
+      </div>
+      <button class="wide" [class.active]="showSatellite" (click)="toggleSatellite()">Satellite view</button>
+      <label class="upload">
+        Upload an image
+        <input type="file" accept="image/*" (change)="uploadImage($event)" />
+      </label>
+      @if (backgroundImage) {
+        <label>
+          Opacity
+          <input type="range" min="0.1" max="1" step="0.05" [value]="backgroundOpacity"
+                 (input)="backgroundOpacity = +$any($event.target).value" />
+        </label>
+        <button class="wide" (click)="removeBackground()">Remove background</button>
+      }
+
+      <h3>Plan size</h3>
+      <div class="pair">
+        <label>
+          Width (m)
+          <input type="number" min="10" [value]="planWidth" (change)="setPlanSize('width', +$any($event.target).value)" />
+        </label>
+        <label>
+          Depth (m)
+          <input type="number" min="10" [value]="planHeight" (change)="setPlanSize('height', +$any($event.target).value)" />
+        </label>
+      </div>
+    </aside>
+
+    <main class="viewport">
+      <div class="plan"
+           [style.width.px]="pixelWidth"
+           [style.height.px]="pixelHeight"
+           (dragover)="allowDrop($event)"
+           (drop)="dropOnPlan($event)">
+        @if (backgroundImage) {
+          <img class="background" [src]="backgroundImage" [style.opacity]="backgroundOpacity" alt="" />
+        }
+        <div class="grid" [style.background-size]="gridBackgroundSize"></div>
+        <canvas #canvas></canvas>
+      </div>
+    </main>
+
+    <aside class="panel">
+      @if (selected) {
+        <h3>{{ kindNames[selected.kind] }} {{ selected.number }}</h3>
+
+        @if (selected.kind === 'SPOT') {
+          <label>
+            Type
+            <select (change)="changeType($any($event.target).value)">
+              @for (type of spotTypes; track type) {
+                <option [value]="type" [selected]="type === selected.type">{{ type }}</option>
+              }
+            </select>
+          </label>
+          <p>Status: {{ statusOf(selected) ?? 'NEW (not saved)' }}</p>
+        }
+
+        <div class="pair">
+          <label>
+            X (m)
+            <input type="number" step="0.5" [value]="selected.x" (change)="setMeters('x', +$any($event.target).value)" />
+          </label>
+          <label>
+            Y (m)
+            <input type="number" step="0.5" [value]="selected.y" (change)="setMeters('y', +$any($event.target).value)" />
+          </label>
+          <label>
+            Width (m)
+            <input type="number" step="0.5" [value]="selected.width" (change)="setMeters('width', +$any($event.target).value)" />
+          </label>
+          <label>
+            Length (m)
+            <input type="number" step="0.5" [value]="selected.height" (change)="setMeters('height', +$any($event.target).value)" />
+          </label>
+        </div>
+        <label>
+          Angle (°)
+          <input type="number" step="15" [value]="selected.angle" (change)="changeSelected({ angle: +$any($event.target).value })" />
+        </label>
+
+        <div class="buttons">
+          <button (click)="rotate()">Rotate 90°</button>
+          <button (click)="addCopies(1)">Duplicate</button>
+          <button class="danger" (click)="remove()">Delete</button>
+        </div>
+
+        @if (selected.kind === 'SPOT') {
+          <button class="wide" (click)="makeUnavailable()"
+                  [disabled]="!savedSpot(selected) || statusOf(selected) === 'NOT_AVAILABLE'">
+            Make unavailable
+          </button>
+          <button class="wide" (click)="makeAvailable()"
+                  [disabled]="!savedSpot(selected) || statusOf(selected) === 'AVAILABLE'">
+            Make available
+          </button>
+          @if (!savedSpot(selected)) {
+            <p class="hint">Save the layout first.</p>
+          }
+
+          <h3>Create a row</h3>
+          <div class="row-tool">
+            <input type="number" min="1" max="50" [value]="rowCount" (change)="rowCount = +$any($event.target).value" />
+            <button (click)="addCopies(rowCount)">Add copies</button>
+          </div>
+        }
+      } @else {
+        <h3>Summary</h3>
+        <p class="total">{{ countSpots() }} spots</p>
+        <p>Regular: {{ countSpots('REGULAR') }}</p>
+        <p>EV: {{ countSpots('EV') }}</p>
+        <p>Handicapped: {{ countSpots('HANDICAPPED') }}</p>
+        <p>Personnel: {{ countSpots('PERSONNEL') }}</p>
+        <p class="hint">
+          Click an item to select it. Drag it to move, use the handles to resize or rotate.
+          Red borders mean a spot overlaps another item.
+        </p>
+        <p class="hint">Shortcuts: Delete, Ctrl+Z, Ctrl+Y, Ctrl+D, Ctrl+S.</p>
+      }
+    </aside>
+  </div>
+</div>
