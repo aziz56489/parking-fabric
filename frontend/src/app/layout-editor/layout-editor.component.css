@@ -159,6 +159,90 @@ button.active {
   pointer-events: none;
 }
 
+.background {
+  right: auto;
+  bottom: auto;
+  max-width: none;
+  max-height: none;
+  transform-origin: center;
+}
+
+.background-transform-overlay {
+  position: absolute;
+  inset: 0;
+  right: auto;
+  bottom: auto;
+  z-index: 10;
+  box-sizing: border-box;
+  max-width: none;
+  max-height: none;
+  border: 1px dashed #2563eb;
+  background: transparent;
+  cursor: move;
+  touch-action: none;
+  transform-origin: center;
+}
+
+.background-control {
+  position: absolute;
+  z-index: 1;
+  box-sizing: border-box;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: 2px solid #2563eb;
+  border-radius: 2px;
+  background: white;
+}
+
+.resize-nw {
+  top: 0;
+  left: 0;
+  transform: translate(-50%, -50%);
+  cursor: nwse-resize;
+}
+
+.resize-ne {
+  top: 0;
+  right: 0;
+  transform: translate(50%, -50%);
+  cursor: nesw-resize;
+}
+
+.resize-sw {
+  bottom: 0;
+  left: 0;
+  transform: translate(-50%, 50%);
+  cursor: nesw-resize;
+}
+
+.resize-se {
+  right: 0;
+  bottom: 0;
+  transform: translate(50%, 50%);
+  cursor: nwse-resize;
+}
+
+.rotate-control {
+  top: -30px;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  cursor: grab;
+}
+
+.rotate-control::before {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 1px;
+  height: 16px;
+  background: #2563eb;
+  content: '';
+}
+
 .grid {
   background-image:
     linear-gradient(to right, rgba(0, 0, 0, 0.06) 1px, transparent 1px),

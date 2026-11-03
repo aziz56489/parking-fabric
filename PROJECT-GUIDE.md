@@ -1,7 +1,7 @@
 # Project file guide
 
 This project is a small parking-area layout editor: an Angular frontend talks to a
-Spring Boot REST API, which stores areas and spots in an in-memory H2 database.
+Spring Boot REST API, which stores areas and spots in MySQL.
 The root `README.md` contains startup instructions and a feature overview.
 
 ## Backend (`backend/`)
@@ -9,7 +9,7 @@ The root `README.md` contains startup instructions and a feature overview.
 ### Build and runtime configuration
 
 - `pom.xml` — Maven dependencies, Java 17 target, Lombok annotation processing, and Spring Boot packaging.
-- `src/main/resources/application.properties` — server port, H2 in-memory database, JPA schema behavior, SQL logging, and H2 console settings.
+- `src/main/resources/application.properties` — server port, configurable MySQL connection, JPA schema behavior, and SQL logging.
 - `src/main/java/com/parking/ParkingLayoutApplication.java` — Spring Boot entry point.
 
 ### API and business logic
@@ -64,4 +64,4 @@ The API is unauthenticated. CORS is enabled for the two local development origin
 Angular app can call the backend. Do not expose it publicly without adding appropriate
 access control.
 
-The H2 database is in memory. Its contents are lost when the backend stops.
+The backend connects to MySQL at `localhost:3306/parking_db` by default. Configure `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD` for your MySQL instance. Hibernate updates the schema without dropping existing data.

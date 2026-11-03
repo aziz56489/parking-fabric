@@ -63,6 +63,19 @@
           <input type="range" min="0.1" max="1" step="0.05" [value]="backgroundOpacity"
                  (input)="backgroundOpacity = +$any($event.target).value" />
         </label>
+        <label>
+          Size ({{ backgroundScale * 100 }}%)
+          <input type="range" min="25" max="300" step="1" [value]="backgroundScale * 100"
+                 (input)="setBackgroundScale(+$any($event.target).value)" />
+        </label>
+        <div class="background-controls">
+          <button class="wide" [class.active]="backgroundMoveEnabled" [attr.aria-pressed]="backgroundMoveEnabled"
+                  (click)="toggleBackgroundMove()">
+            {{ backgroundMoveEnabled ? 'Done editing' : 'Edit background' }}
+          </button>
+          <button class="wide" (click)="rotateBackground()">Rotate 90° ({{ backgroundRotationRounded }}°)</button>
+        </div>
+        <p class="hint">The image starts at its original pixel dimensions. When editing, drag it to move, a corner to resize, or the top handle to rotate.</p>
         <button class="wide" (click)="removeBackground()">Remove background</button>
       }
 
@@ -86,10 +99,32 @@
            (dragover)="allowDrop($event)"
            (drop)="dropOnPlan($event)">
         @if (backgroundImage) {
-          <img class="background" [src]="backgroundImage" [style.opacity]="backgroundOpacity" alt="" />
+          <img class="background" [src]="backgroundImage" [style.opacity]="backgroundOpacity"
+               [style.width.px]="backgroundPixelWidth" [style.height.px]="backgroundPixelHeight"
+               [style.transform]="backgroundTransform" (load)="setBackgroundDimensions($event)" alt="" />
         }
         <div class="grid" [style.background-size]="gridBackgroundSize"></div>
         <canvas #canvas></canvas>
+        @if (backgroundImage && backgroundMoveEnabled) {
+          <div class="background-transform-overlay"
+               [style.width.px]="backgroundPixelWidth" [style.height.px]="backgroundPixelHeight"
+               [style.transform]="backgroundTransform"
+               (pointerdown)="startBackgroundInteraction($event, 'move')"
+               (pointermove)="moveBackgroundInteraction($event)"
+               (pointerup)="finishBackgroundInteraction($event)"
+               (pointercancel)="finishBackgroundInteraction($event)">
+            <button type="button" class="background-control resize-nw" aria-label="Resize background"
+                    (pointerdown)="startBackgroundInteraction($event, 'resize')"></button>
+            <button type="button" class="background-control resize-ne" aria-label="Resize background"
+                    (pointerdown)="startBackgroundInteraction($event, 'resize')"></button>
+            <button type="button" class="background-control resize-sw" aria-label="Resize background"
+                    (pointerdown)="startBackgroundInteraction($event, 'resize')"></button>
+            <button type="button" class="background-control resize-se" aria-label="Resize background"
+                    (pointerdown)="startBackgroundInteraction($event, 'resize')"></button>
+            <button type="button" class="background-control rotate-control" aria-label="Rotate background"
+                    (pointerdown)="startBackgroundInteraction($event, 'rotate')"></button>
+          </div>
+        }
       </div>
     </main>
 
@@ -165,7 +200,7 @@
         <p>Handicapped: {{ countSpots('HANDICAPPED') }}</p>
         <p>Personnel: {{ countSpots('PERSONNEL') }}</p>
         <p class="hint">
-          Click an item to select it. Drag it to move, use the handles to resize or rotate.
+          Click an item to select it; Shift-click or drag across empty space to select multiple. Drag a selection to move it, or use the handles to resize or rotate.
           Red borders mean a spot overlaps another item.
         </p>
         <p class="hint">Shortcuts: Delete, Ctrl+Z, Ctrl+Y, Ctrl+D, Ctrl+S.</p>

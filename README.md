@@ -17,7 +17,7 @@ cd backend
 mvn spring-boot:run
 ```
 
-H2 console: http://localhost:8080/h2-console (JDBC URL `jdbc:h2:mem:parking_db`, user `sa`, no password)
+The backend uses MySQL. Create or allow it to create the `parking_db` database, then configure `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD` as needed. Defaults connect to `localhost:3306` as `root` with no password. The schema is updated on startup and data is retained when the backend stops.
 
 ## Run the frontend
 

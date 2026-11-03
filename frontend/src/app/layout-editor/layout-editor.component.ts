@@ -1,7 +1,7 @@
 import { AfterViewInit, Component, ElementRef, HostListener, OnDestroy, ViewChild, inject } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { Canvas, FabricObject, Group } from 'fabric';
+import { ActiveSelection, Canvas, FabricObject, Group } from 'fabric';
 import { ParkingService } from '../parking.service';
 import { Item, ItemKind, Layout, PaletteEntry, ParkingArea, ParkingSpot, SpotStatus, SpotType } from '../models';
 import { PIXELS_PER_METER, byLayer, createPlanObject, findOverlaps, readPlanObject, snapToHalfMeter } from './plan-items';
@@ -57,16 +57,50 @@ export class LayoutEditorComponent implements AfterViewInit, OnDestroy {
   showSatellite = false;
   uploadedImage: string | null = null;
   backgroundOpacity = 0.6;
+  backgroundMoveEnabled = false;
+  backgroundOffsetX = 0;
+  backgroundOffsetY = 0;
+  backgroundRotation = 0;
+  backgroundScale = 1;
+  private backgroundNativeWidth = 0;
+  private backgroundNativeHeight = 0;
 
   private canvas!: Canvas;
   private objects = new Map<Group, Item>();
   private undoStack: Item[][] = [];
   private redoStack: Item[][] = [];
   private draggedEntry: PaletteEntry | null = null;
+  private backgroundInteraction: {
+    mode: 'move' | 'resize' | 'rotate';
+    pointerId: number;
+    clientX: number;
+    clientY: number;
+    offsetX: number;
+    offsetY: number;
+    scale: number;
+    rotation: number;
+    centerX: number;
+    centerY: number;
+    startDistance: number;
+    startAngle: number;
+  } | null = null;
 
   ngAfterViewInit() {
-    this.canvas = new Canvas(this.canvasElement.nativeElement, { selection: false, preserveObjectStacking: true });
-    this.canvas.on('object:moving', ({ target }) => this.snapToGrid(target));
+    // Fabric's marquee selection is disabled by default when selection is false.
+    // Keep stacking order stable so overlapping components can still be picked.
+    this.canvas = new Canvas(this.canvasElement.nativeElement, {
+      selection: true,
+      selectionKey: ['shiftKey', 'ctrlKey', 'metaKey'],
+      preserveObjectStacking: true,
+    });
+    this.canvas.on('object:moving', ({ target }) => {
+      // ActiveSelection's left/top are its bounding box, not a component's
+      // canvas position. Snapping that wrapper can pull the whole selection to
+      // (0, 0), so snap multi-selections after Fabric restores their objects.
+      if (!(target instanceof ActiveSelection)) {
+        this.snapToGrid(target);
+      }
+    });
     this.canvas.on('object:modified', () => queueMicrotask(() => this.saveCanvasChanges()));
     this.canvas.on('selection:created', () => this.updateSelected());
     this.canvas.on('selection:updated', () => this.updateSelected());
@@ -108,6 +142,25 @@ export class LayoutEditorComponent implements AfterViewInit, OnDestroy {
 
   get backgroundImage(): string | null {
     return this.uploadedImage ?? this.satelliteUrl;
+  }
+
+  get backgroundTransform(): string {
+    const pixelsPerMeter = PIXELS_PER_METER * this.zoom;
+    const x = this.backgroundOffsetX * pixelsPerMeter;
+    const y = this.backgroundOffsetY * pixelsPerMeter;
+    return `translate(${x}px, ${y}px) rotate(${this.backgroundRotation}deg) scale(${this.backgroundScale})`;
+  }
+
+  get backgroundPixelWidth(): number {
+    return this.backgroundNativeWidth * this.zoom;
+  }
+
+  get backgroundPixelHeight(): number {
+    return this.backgroundNativeHeight * this.zoom;
+  }
+
+  get backgroundRotationRounded(): number {
+    return Math.round(this.backgroundRotation);
   }
 
   get satelliteUrl(): string | null {
@@ -330,6 +383,7 @@ export class LayoutEditorComponent implements AfterViewInit, OnDestroy {
     }
     this.uploadedImage = null;
     this.showSatellite = !this.showSatellite;
+    this.resetBackgroundTransform();
   }
 
   uploadImage(event: Event) {
@@ -338,13 +392,107 @@ export class LayoutEditorComponent implements AfterViewInit, OnDestroy {
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => (this.uploadedImage = reader.result as string);
+    reader.onload = () => {
+      this.uploadedImage = reader.result as string;
+      this.showSatellite = false;
+      this.resetBackgroundTransform();
+    };
     reader.readAsDataURL(file);
   }
 
   removeBackground() {
     this.uploadedImage = null;
     this.showSatellite = false;
+    this.backgroundMoveEnabled = false;
+    this.resetBackgroundTransform();
+    this.backgroundNativeWidth = 0;
+    this.backgroundNativeHeight = 0;
+  }
+
+  toggleBackgroundMove() {
+    this.backgroundMoveEnabled = !this.backgroundMoveEnabled;
+    this.backgroundInteraction = null;
+  }
+
+  rotateBackground() {
+    this.backgroundRotation = (this.backgroundRotation + 90) % 360;
+  }
+
+  setBackgroundScale(percent: number) {
+    this.backgroundScale = Math.min(3, Math.max(0.25, percent / 100));
+  }
+
+  setBackgroundDimensions(event: Event) {
+    const image = event.currentTarget as HTMLImageElement;
+    this.backgroundNativeWidth = image.naturalWidth;
+    this.backgroundNativeHeight = image.naturalHeight;
+  }
+
+  startBackgroundInteraction(event: PointerEvent, mode: 'move' | 'resize' | 'rotate') {
+    if (!this.backgroundMoveEnabled) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    const plan = this.canvasElement.nativeElement.closest('.plan') as HTMLElement | null;
+    if (!plan) {
+      return;
+    }
+    const planBounds = plan.getBoundingClientRect();
+    const pixelsPerMeter = PIXELS_PER_METER * this.zoom;
+    const centerX = planBounds.left + this.backgroundOffsetX * pixelsPerMeter + this.backgroundPixelWidth / 2;
+    const centerY = planBounds.top + this.backgroundOffsetY * pixelsPerMeter + this.backgroundPixelHeight / 2;
+    const deltaX = event.clientX - centerX;
+    const deltaY = event.clientY - centerY;
+    this.backgroundInteraction = {
+      mode,
+      pointerId: event.pointerId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      offsetX: this.backgroundOffsetX,
+      offsetY: this.backgroundOffsetY,
+      scale: this.backgroundScale,
+      rotation: this.backgroundRotation,
+      centerX,
+      centerY,
+      startDistance: Math.max(1, Math.hypot(deltaX, deltaY)),
+      startAngle: Math.atan2(deltaY, deltaX),
+    };
+  }
+
+  moveBackgroundInteraction(event: PointerEvent) {
+    const interaction = this.backgroundInteraction;
+    if (!interaction || interaction.pointerId !== event.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (interaction.mode === 'move') {
+      const pixelsPerMeter = PIXELS_PER_METER * this.zoom;
+      this.backgroundOffsetX = interaction.offsetX + (event.clientX - interaction.clientX) / pixelsPerMeter;
+      this.backgroundOffsetY = interaction.offsetY + (event.clientY - interaction.clientY) / pixelsPerMeter;
+    } else if (interaction.mode === 'resize') {
+      const distance = Math.hypot(event.clientX - interaction.centerX, event.clientY - interaction.centerY);
+      this.backgroundScale = Math.min(3, Math.max(0.25, interaction.scale * distance / interaction.startDistance));
+    } else {
+      const angle = Math.atan2(event.clientY - interaction.centerY, event.clientX - interaction.centerX);
+      const degrees = (angle - interaction.startAngle) * 180 / Math.PI;
+      this.backgroundRotation = ((interaction.rotation + degrees) % 360 + 360) % 360;
+    }
+  }
+
+  finishBackgroundInteraction(event: PointerEvent) {
+    if (this.backgroundInteraction?.pointerId === event.pointerId) {
+      this.backgroundInteraction = null;
+    }
+  }
+
+  private resetBackgroundTransform() {
+    this.backgroundOffsetX = 0;
+    this.backgroundOffsetY = 0;
+    this.backgroundRotation = 0;
+    this.backgroundScale = 1;
   }
 
   // ---------- history and saving ----------
@@ -452,22 +600,43 @@ export class LayoutEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private saveCanvasChanges() {
-    const active = this.canvas.getActiveObject();
+    const activeObjects = new Set(this.canvas.getActiveObjects());
+    if (activeObjects.size > 1) {
+      // Unwrap before reading coordinates: while grouped, child left/top values
+      // are relative to the ActiveSelection rather than to the canvas.
+      this.canvas.discardActiveObject();
+    }
     const items: Item[] = [];
-    let selected: Item | null = null;
+    const selectedItems: Item[] = [];
     for (const [object, item] of this.objects) {
       const updated = readPlanObject(object, item);
       items.push(updated);
-      if (object === active) {
-        selected = updated;
+      if (activeObjects.has(object)) {
+        selectedItems.push(updated);
       }
     }
-    this.commit(items, selected);
+    this.commit(items, selectedItems[0] ?? null);
+
+    // Redrawing after a move/resize replaces Fabric objects. Rebuild the active
+    // selection from the new objects so the whole group remains selected.
+    if (selectedItems.length > 1) {
+      const selectedObjects = [...this.objects]
+        .filter(([, item]) => selectedItems.includes(item))
+        .map(([object]) => object);
+      this.canvas.setActiveObject(new ActiveSelection(selectedObjects, { canvas: this.canvas }));
+      this.canvas.requestRenderAll();
+      this.updateSelected();
+    }
   }
 
   private updateSelected() {
-    const active = this.canvas.getActiveObject();
-    this.selected = active instanceof Group ? this.objects.get(active) ?? null : null;
+    const activeObjects = this.canvas.getActiveObjects();
+    // The inspector edits a single component, so use the first selected item
+    // as its representative while Fabric retains the full multi-selection.
+    const active = activeObjects[0];
+    this.selected = active instanceof Group || active instanceof ActiveSelection
+      ? this.objects.get(active as Group) ?? null
+      : null;
   }
 
   private snapToGrid(object: FabricObject) {
