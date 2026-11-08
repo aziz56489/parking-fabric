@@ -1,9 +1,19 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
 }
+
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use { load(it) }
+    }
+}
+val apiUrl = localProperties.getProperty("api.url") ?: "http://localhost:8080/api/"
 
 android {
     namespace = "com.parking.app"
@@ -16,9 +26,7 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        // 10.0.2.2 is the computer running the Android emulator.
-        // On a real phone, replace it with the computer's Wi-Fi IP address, for example http://192.168.1.20:8080/api/
-        buildConfigField("String", "API_URL", "\"http://10.0.2.2:8080/api/\"")
+        buildConfigField("String", "API_URL", "\"$apiUrl\"")
     }
 
     buildFeatures {

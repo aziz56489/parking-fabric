@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import com.parking.app.GeoPoint
 import com.parking.app.ParkingViewModel
+import androidx.core.net.toUri
 
 /** Top bar with an optional back button, and a snackbar that shows the view model's messages. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -80,14 +81,28 @@ fun hasLocationPermission(context: Context): Boolean =
         ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
     }
 
-/** Opens Google Maps (or any maps app) on the parking area. */
-fun openDirections(context: Context, point: GeoPoint, label: String) {
-    val coordinates = "${point.latitude},${point.longitude}"
-    val uri = Uri.parse("geo:$coordinates?q=$coordinates(${Uri.encode(label)})")
+/** Opens Google Maps (or any maps app) on the parking area using latitude and longitude. */
+fun openDirections(context: Context, point: GeoPoint?, label: String) {
+    val uri = if (point != null) {
+        // geo:latitude,longitude?q=latitude,longitude(label) opens Google Maps directly at the exact location pin
+        ("geo:${point.latitude},${point.longitude}?q=${point.latitude},${point.longitude}(" + Uri.encode(label) + ")").toUri()
+    } else {
+        ("https://www.google.com/maps/search/?api=1&query=" + Uri.encode(label)).toUri()
+    }
+    val googleMaps = Intent(Intent.ACTION_VIEW, uri).setPackage("com.google.android.apps.maps")
     try {
-        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+        context.startActivity(googleMaps)
     } catch (e: ActivityNotFoundException) {
-        Toast.makeText(context, "No maps app installed", Toast.LENGTH_SHORT).show()
+        val webUri = if (point != null) {
+            ("https://www.google.com/maps/search/?api=1&query=${point.latitude},${point.longitude}").toUri()
+        } else {
+            ("https://www.google.com/maps/search/?api=1&query=" + Uri.encode(label)).toUri()
+        }
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, webUri))
+        } catch (e: ActivityNotFoundException) {
+            Toast.makeText(context, "No maps app or browser installed", Toast.LENGTH_SHORT).show()
+        }
     }
 }
 

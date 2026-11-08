@@ -137,17 +137,23 @@ fun AreasScreen(
                 item { Text("No parking areas yet.") }
             }
             items(vm.areas, key = { it.area.id }) { info ->
-                Card(onClick = { onOpenArea(info.area.id) }) {
+                Card(
+                    onClick = { onOpenArea(info.area.id) },
+                ) {
                     Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(info.area.name, style = MaterialTheme.typography.titleMedium)
                             Text("${info.freeSpots} of ${info.area.spots.size} spots free")
+                            Text(
+                                info.distanceMeters?.let(::formatDistance)
+                                    ?: if (info.location == null) "No location" else "",
+                                style = MaterialTheme.typography.labelLarge,
+                            )
                         }
-                        Text(
-                            info.distanceMeters?.let(::formatDistance)
-                                ?: if (info.location == null) "No location" else "",
-                            style = MaterialTheme.typography.labelLarge,
-                        )
+                        TextButton(onClick = { openDirections(context, info.location, info.area.name) }) {
+                            Text("Map")
+                        }
+                        TextButton(onClick = { onOpenArea(info.area.id) }) { Text("Spots") }
                     }
                 }
             }

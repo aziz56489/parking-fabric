@@ -1,49 +1,55 @@
 {
-  "hash": "805d4257",
-  "configHash": "dff87cab",
-  "lockfileHash": "e585b500",
-  "browserHash": "23b9bc9c",
+  "hash": "cd9afc21",
+  "configHash": "bf96f1f8",
+  "lockfileHash": "1dd7a0d0",
+  "browserHash": "6543fae0",
   "optimized": {
     "@angular/common": {
       "src": "../../../../../../node_modules/@angular/common/fesm2022/common.mjs",
       "file": "@angular_common.js",
-      "fileHash": "886cd89d",
+      "fileHash": "5ac80c4a",
       "needsInterop": false
     },
     "@angular/common/http": {
       "src": "../../../../../../node_modules/@angular/common/fesm2022/http.mjs",
       "file": "@angular_common_http.js",
-      "fileHash": "c093b010",
+      "fileHash": "2703469b",
       "needsInterop": false
     },
     "@angular/core": {
       "src": "../../../../../../node_modules/@angular/core/fesm2022/core.mjs",
       "file": "@angular_core.js",
-      "fileHash": "f4c221d7",
+      "fileHash": "b3dd549f",
       "needsInterop": false
     },
     "@angular/forms": {
       "src": "../../../../../../node_modules/@angular/forms/fesm2022/forms.mjs",
       "file": "@angular_forms.js",
-      "fileHash": "48966a65",
+      "fileHash": "208a7ba0",
+      "needsInterop": false
+    },
+    "@angular/google-maps": {
+      "src": "../../../../../../node_modules/@angular/google-maps/fesm2022/google-maps.mjs",
+      "file": "@angular_google-maps.js",
+      "fileHash": "77756229",
       "needsInterop": false
     },
     "@angular/platform-browser": {
       "src": "../../../../../../node_modules/@angular/platform-browser/fesm2022/platform-browser.mjs",
       "file": "@angular_platform-browser.js",
-      "fileHash": "9cda3c1a",
+      "fileHash": "47612311",
       "needsInterop": false
     },
     "@angular/router": {
       "src": "../../../../../../node_modules/@angular/router/fesm2022/router.mjs",
       "file": "@angular_router.js",
-      "fileHash": "2334bd77",
+      "fileHash": "bb9749e4",
       "needsInterop": false
     },
     "fabric": {
       "src": "../../../../../../node_modules/fabric/dist/index.min.mjs",
       "file": "fabric.js",
-      "fileHash": "2c1cd877",
+      "fileHash": "acb6338a",
       "needsInterop": false
     }
   },

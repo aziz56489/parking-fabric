@@ -55,6 +55,10 @@ data class ParkingArea(
     val layout: String? = null,
     val capacity: Int = 0,
     val spots: List<ParkingSpot> = emptyList(),
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val lat: Double? = null,
+    val lng: Double? = null,
 )
 
 /** One shape of the plan. Sizes are in metres; (x, y) is the top-left corner and the shape is rotated around it. */
@@ -77,6 +81,8 @@ data class Layout(
     val height: Double = 50.0,
     val latitude: Double? = null,
     val longitude: Double? = null,
+    val lat: Double? = null,
+    val lng: Double? = null,
     val floors: List<List<Item>> = emptyList(),
 )
 
@@ -106,7 +112,18 @@ fun ParkingArea.parseLayout(): Layout? =
     layout?.let { runCatching { json.decodeFromString<Layout>(it) }.getOrNull() }
 
 val Layout.location: GeoPoint?
-    get() = if (latitude != null && longitude != null) GeoPoint(latitude, longitude) else null
+    get() {
+        val latVal = latitude ?: lat
+        val lngVal = longitude ?: lng
+        return if (latVal != null && lngVal != null) GeoPoint(latVal, lngVal) else null
+    }
+
+val ParkingArea.location: GeoPoint?
+    get() {
+        val latVal = latitude ?: lat
+        val lngVal = longitude ?: lng
+        return if (latVal != null && lngVal != null) GeoPoint(latVal, lngVal) else parseLayout()?.location
+    }
 
 fun floorName(index: Int) = "Level ${'A' + index}"
 

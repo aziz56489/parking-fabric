@@ -5,11 +5,14 @@ import { ActiveSelection, Canvas, FabricObject, Group } from 'fabric';
 import { ParkingService } from '../parking.service';
 import { Item, ItemKind, Layout, PaletteEntry, ParkingArea, ParkingSpot, SpotStatus, SpotType } from '../models';
 import { PIXELS_PER_METER, byLayer, createPlanObject, findOverlaps, readPlanObject, snapToHalfMeter } from './plan-items';
+import { GoogleMap, MapMarker, MapPolyline, MapRectangle } from '@angular/google-maps';
+
+
 
 @Component({
   selector: 'app-layout-editor',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, GoogleMap, MapMarker, MapPolyline, MapRectangle],
   templateUrl: './layout-editor.component.html',
   styleUrl: './layout-editor.component.css',
 })
@@ -54,6 +57,8 @@ export class LayoutEditorComponent implements AfterViewInit, OnDestroy {
 
   latitude: number | null = null;
   longitude: number | null = null;
+  coordinateText = '';
+  showMap = false;
   showSatellite = false;
   uploadedImage: string | null = null;
   backgroundOpacity = 0.6;
@@ -138,6 +143,13 @@ export class LayoutEditorComponent implements AfterViewInit, OnDestroy {
 
   get canRedo() {
     return this.redoStack.length > 0;
+  }
+
+  get hasValidCoordinates(): boolean {
+    return this.latitude !== null && this.longitude !== null
+      && Number.isFinite(this.latitude) && Number.isFinite(this.longitude)
+      && this.latitude >= -90 && this.latitude <= 90
+      && this.longitude >= -180 && this.longitude <= 180;
   }
 
   get backgroundImage(): string | null {
@@ -371,9 +383,25 @@ export class LayoutEditorComponent implements AfterViewInit, OnDestroy {
     this.resizeCanvas();
   }
 
-  setCoordinate(axis: 'latitude' | 'longitude', value: string) {
-    const number = Number(value.replace(',', '.'));
-    this[axis] = value.trim() === '' || isNaN(number) ? null : number;
+  setCoordinates(value: string) {
+    this.coordinateText = value.trim();
+    const parts = this.coordinateText.split(',');
+    if (parts.length !== 2 || !parts[0].trim() || !parts[1].trim()) {
+      this.latitude = null;
+      this.longitude = null;
+      return;
+    }
+
+    const latitude = Number(parts[0].trim());
+    const longitude = Number(parts[1].trim());
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)
+        || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+      this.latitude = null;
+      this.longitude = null;
+      return;
+    }
+    this.latitude = latitude;
+    this.longitude = longitude;
   }
 
   toggleSatellite() {
@@ -514,7 +542,8 @@ export class LayoutEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   save() {
-    if (!this.area) {
+    if (!this.area || !this.hasValidCoordinates) {
+      this.message = 'Enter latitude and longitude as latitude,longitude before saving';
       return;
     }
     const layout: Layout = {
@@ -564,6 +593,9 @@ export class LayoutEditorComponent implements AfterViewInit, OnDestroy {
     this.planHeight = layout?.height ?? 50;
     this.latitude = layout?.latitude ?? null;
     this.longitude = layout?.longitude ?? null;
+    this.coordinateText = this.latitude !== null && this.longitude !== null
+      ? `${this.latitude},${this.longitude}`
+      : '';
     this.floors = layout?.floors ?? [[]];
     for (const item of this.floors.flat()) {
       const saved = this.savedSpot(item);
@@ -683,5 +715,14 @@ export class LayoutEditorComponent implements AfterViewInit, OnDestroy {
 
   private showError(err: HttpErrorResponse) {
     this.message = err.error?.message ?? 'Something went wrong';
+  }
+
+  private distanceBetween(start: google.maps.LatLngLiteral, end: google.maps.LatLngLiteral): number {
+    const radians = (degrees: number) => degrees * Math.PI / 180;
+    const latitudeDelta = radians(end.lat - start.lat);
+    const longitudeDelta = radians(end.lng - start.lng);
+    const a = Math.sin(latitudeDelta / 2) ** 2
+      + Math.cos(radians(start.lat)) * Math.cos(radians(end.lat)) * Math.sin(longitudeDelta / 2) ** 2;
+    return 6_371_000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 }

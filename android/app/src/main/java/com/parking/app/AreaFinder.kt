@@ -11,12 +11,12 @@ data class GeoPoint(val latitude: Double, val longitude: Double)
 /** A parking area with its parsed plan and its distance from the user (null when unknown). */
 data class AreaInfo(val area: ParkingArea, val layout: Layout?, val distanceMeters: Double?) {
     val freeSpots: Int get() = area.spots.count { it.status == SpotStatus.AVAILABLE }
-    val location: GeoPoint? get() = layout?.location
+    val location: GeoPoint? get() = area.location ?: layout?.location
 
     companion object {
         fun of(area: ParkingArea, user: GeoPoint?): AreaInfo {
             val layout = area.parseLayout()
-            val location = layout?.location
+            val location = area.location ?: layout?.location
             val distance = if (user != null && location != null) distanceMeters(user, location) else null
             return AreaInfo(area, layout, distance)
         }

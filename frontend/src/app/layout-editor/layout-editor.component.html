@@ -21,7 +21,7 @@
       <span>{{ zoom * 100 }}%</span>
       <button (click)="zoomBy(0.25)">+</button>
     </div>
-    <button class="primary" (click)="save()">Save layout</button>
+    <button class="primary" (click)="save()" [disabled]="!hasValidCoordinates">Save layout</button>
   </header>
 
   @if (message) {
@@ -42,16 +42,14 @@
       }
 
       <h3>Background</h3>
-      <div class="pair">
-        <label>
-          Latitude
-          <input [value]="latitude ?? ''" placeholder="36.838" (change)="setCoordinate('latitude', $any($event.target).value)" />
-        </label>
-        <label>
-          Longitude
-          <input [value]="longitude ?? ''" placeholder="10.243" (change)="setCoordinate('longitude', $any($event.target).value)" />
-        </label>
-      </div>
+      <label>
+        Latitude, longitude
+        <input type="text" [value]="coordinateText" placeholder="36.838,10.243"
+               (input)="setCoordinates($any($event.target).value)" />
+      </label>
+      @if (!hasValidCoordinates) {
+        <p class="hint">Enter coordinates as latitude,longitude to save the layout.</p>
+      }
       <button class="wide" [class.active]="showSatellite" (click)="toggleSatellite()">Satellite view</button>
       <label class="upload">
         Upload an image
