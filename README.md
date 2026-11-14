@@ -13,11 +13,15 @@ position back when the admin saves.
 Requires JDK 17 and Maven. From the repository root, run:
 
 ```powershell
+$env:ADMIN_PASSWORD = "choose-a-strong-admin-password"
+$env:DB_PASSWORD = "your-supabase-database-password"
 cd backend
 mvn spring-boot:run
 ```
 
-The backend uses MySQL. Create or allow it to create the `parking_db` database, then configure `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD` as needed. Defaults connect to `localhost:3306` as `root` with no password. The schema is updated on startup and data is retained when the backend stops.
+On first startup, the backend creates the initial administrator using `ADMIN_EMAIL` (default `admin@parking.com`) and `ADMIN_PASSWORD`. If `ADMIN_PASSWORD` is unset, it skips admin creation; public registration always creates a regular user.
+
+The backend connects to the Supabase PostgreSQL pooler. The default URL and username point at this project's Supabase pooler; set `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD` in the environment to use another connection or password. The schema is updated on startup and data is retained when the backend stops. Keep database credentials in environment variables, not in this file.
 
 ## Run the frontend
 
@@ -38,7 +42,7 @@ Open http://localhost:4200, create a parking area, then click "Edit layout".
 - `GET /api/parking-spots/{id}` — retrieve one spot.
 - `PATCH /api/parking-spots/{id}` — update a spot's `type`, `status`, or both. For example, send `{"status":"NOT_AVAILABLE"}` to make a spot unavailable.
 
-All endpoints return JSON. The API does not include authentication.
+All endpoints return JSON. The admin endpoints require the administrator session created by `POST /api/auth/login`; the Angular app validates that session and sends the session cookie and CSRF token automatically. Reservations remain available to the Android client.
 
 ## Editor
 

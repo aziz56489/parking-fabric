@@ -18,6 +18,7 @@ import java.util.Currency;
 @Entity
 @Getter
 @NoArgsConstructor
+@Table (name="reservation" , schema="public")
 public class Reservation {
 
     @Id

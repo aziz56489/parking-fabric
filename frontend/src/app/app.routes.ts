@@ -1,8 +1,12 @@
 import { Routes } from '@angular/router';
+import { authGuard } from './auth.guard';
+import { LoginComponent } from './login/login.component';
 import { ParkingListComponent } from './parking-list/parking-list.component';
 import { LayoutEditorComponent } from './layout-editor/layout-editor.component';
 
 export const routes: Routes = [
-  { path: '', component: ParkingListComponent },
-  { path: 'parking-areas/:id', component: LayoutEditorComponent },
+  { path: 'login', component: LoginComponent },
+  { path: '', component: ParkingListComponent, canActivate: [authGuard] },
+  { path: 'parking-areas/:id', component: LayoutEditorComponent, canActivate: [authGuard] },
+  { path: '**', redirectTo: '' },
 ];

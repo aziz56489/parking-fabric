@@ -10,6 +10,7 @@ import java.util.List;
 @Entity
 @Getter
 @Setter
+@Table(name="parking_area" , schema= "public")
 public class ParkingArea {
 
     @Id
@@ -19,7 +20,8 @@ public class ParkingArea {
     @Column(unique = true)
     private String name;
 
-    @Lob
+    // PostgreSQL text avoids Hibernate's OID-based large-object handling for @Lob.
+    @Column(columnDefinition = "text")
     private String layout;
 
     private int capacity;

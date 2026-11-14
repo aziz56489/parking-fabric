@@ -14,7 +14,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/parking-areas")
-@CrossOrigin(origins = {"http://localhost:4200", "http://127.0.0.1:4200"})
 @RequiredArgsConstructor
 public class ParkingAreaController {
 

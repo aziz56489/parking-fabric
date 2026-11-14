@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Getter
 @NoArgsConstructor
+@Table(name = "parking_spot" , schema = "public")
 public class ParkingSpot {
 
     @Id

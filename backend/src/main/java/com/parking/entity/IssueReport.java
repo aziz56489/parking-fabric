@@ -10,6 +10,7 @@ import java.time.temporal.ChronoUnit;
 @Entity
 @Getter
 @NoArgsConstructor
+@Table(name="issue_report" , schema ="public")
 public class IssueReport {
 
     @Id

@@ -1,0 +1,47 @@
+<div class="login-page">
+  <div class="login-card">
+    <div class="login-logo">
+      <span class="logo-icon">🅿</span>
+    </div>
+    <h1>Admin Login</h1>
+    <p class="subtitle">Parking Management System</p>
+
+    <form (ngSubmit)="submit()">
+      <div class="field">
+        <label for="email">Email</label>
+        <input
+          id="email"
+          type="email"
+          name="email"
+          [(ngModel)]="email"
+          placeholder="admin@parking.com"
+          autocomplete="username"
+          [disabled]="loading"
+        />
+      </div>
+
+      <div class="field">
+        <label for="password">Password</label>
+        <input
+          id="password"
+          type="password"
+          name="password"
+          [(ngModel)]="password"
+          placeholder="Password"
+          autocomplete="current-password"
+          [disabled]="loading"
+        />
+      </div>
+
+      @if (error) {
+        <p class="error">{{ error }}</p>
+      }
+
+      <button type="submit" [disabled]="loading" class="login-btn">
+        @if (loading) { Signing in… } @else { Sign in }
+      </button>
+    </form>
+
+    <p class="note">Only administrator accounts can sign in.</p>
+  </div>
+</div>
