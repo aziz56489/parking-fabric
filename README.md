@@ -33,6 +33,10 @@ npm start
 
 Open http://localhost:4200, create a parking area, then click "Edit layout".
 
+## Run the Android app
+
+The Android emulator uses `http://10.0.2.2:8080/api/` to reach the backend on the host machine. For a physical device, set `api.url` in `android/local.properties` to the host computer's LAN address, for example `http://192.168.1.20:8080/api/`, and keep the phone and computer on the same network.
+
 ## REST API
 
 - `GET /api/parking-areas` — list parking areas.

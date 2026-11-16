@@ -103,10 +103,44 @@ data class Reservation(
 )
 
 @Serializable
-data class ReservationRequest(val spotId: Int, val userId: String)
+data class ReservationRequest(val spotId: Int, val userId: Int)
 
 @Serializable
 data class IssueRequest(val type: IssueType, val description: String)
+
+/** Matches the `users` table in schema.sql */
+@Serializable
+data class UserAccount(
+    val id: Int,
+    val name: String,
+    val email: String,
+    val role: String = "USER",
+    val isHandicapped: Boolean = false,
+    val isEvOwner: Boolean = false,
+    val isBlocked: Boolean = false,
+) {
+    val statusLabel: String
+        get() = when {
+            isHandicapped -> "Handicapped"
+            isEvOwner -> "EV Owner"
+            role != "USER" -> role
+            else -> "Regular"
+        }
+}
+
+@Serializable
+data class LoginRequest(val email: String, val password: String)
+
+@Serializable
+data class RegisterRequest(val name: String, val email: String, val password: String)
+
+@Serializable
+data class UpdateUserRequest(
+    val name: String,
+    val email: String,
+    val isHandicapped: Boolean,
+    val isEvOwner: Boolean,
+)
 
 fun ParkingArea.parseLayout(): Layout? =
     layout?.let { runCatching { json.decodeFromString<Layout>(it) }.getOrNull() }

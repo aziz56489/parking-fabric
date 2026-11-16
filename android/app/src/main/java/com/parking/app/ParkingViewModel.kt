@@ -14,18 +14,37 @@ import com.google.android.gms.location.Priority
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import java.util.UUID
 
-/** All the app state. Screens read these properties and call these functions. */
+/** All the app state and database-backed authentication with automatic backend discovery. */
 class ParkingViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val api = ParkingApi.create()
+    private var api = ParkingApi.create(application)
     private val locationClient = LocationServices.getFusedLocationProviderClient(application)
 
-    /** There are no accounts yet: a random id, kept on the phone, identifies the user's reservations. */
-    private var userId: String = application.getSharedPreferences("parking", Context.MODE_PRIVATE).let { prefs ->
-        prefs.getString("userId", null) ?: UUID.randomUUID().toString().also {
-            prefs.edit().putString("userId", it).apply()
+    // Older app builds stored a UUID String here. Android throws ClassCastException
+    // when getInt reads that value, so accept either format during the migration.
+    private var userId: Int = readStoredUserId(
+        application.getSharedPreferences("parking", Context.MODE_PRIVATE),
+    )
+
+    var currentUser by mutableStateOf<UserAccount?>(null)
+        private set
+    val isLoggedIn: Boolean
+        get() = currentUser != null
+
+    init {
+        val prefs = application.getSharedPreferences("parking", Context.MODE_PRIVATE)
+        val savedUserId = readStoredUserId(prefs)
+        val savedName = prefs.getString("userName", null)
+        val savedEmail = prefs.getString("userEmail", null)
+        val savedRole = prefs.getString("userRole", "USER")
+        val savedHandicapped = prefs.getBoolean("isHandicapped", false)
+        val savedEv = prefs.getBoolean("isEvOwner", false)
+        val savedBlocked = prefs.getBoolean("isBlocked", false)
+
+        if (savedUserId != 0 && savedEmail != null) {
+            currentUser = UserAccount(savedUserId, savedName ?: "User", savedEmail, savedRole ?: "USER", savedHandicapped, savedEv, savedBlocked)
+            userId = savedUserId
         }
     }
 
@@ -54,17 +73,26 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
         private set
     var message by mutableStateOf<String?>(null)
 
+    /** Loads areas from the configured backend URL. */
     fun refreshAreas() = launch {
         try {
             allAreas = api.areas()
+        } catch (e: Exception) {
+            message = "Cannot load parking areas: ${e.userMessage()}"
         } finally {
             areasLoaded = true
         }
     }
 
     fun refreshReservations() = launch {
-        history = api.reservations(userId)
-        reservation = history.firstOrNull { it.active }
+        if (userId != 0) {
+            try {
+                history = api.reservations(userId)
+                reservation = history.firstOrNull { it.active }
+            } catch (e: Exception) {
+                // Ignore if offline
+            }
+        }
     }
 
     @SuppressLint("MissingPermission") // The screen asks for the permission before calling this.
@@ -85,40 +113,173 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
 
     fun openArea(id: Int) = launch {
         if (currentArea?.area?.id != id) currentArea = null
-        currentArea = AreaInfo.of(api.area(id), location)
+        try {
+            currentArea = AreaInfo.of(api.area(id), location)
+        } catch (e: Exception) {
+            message = "Cannot load area from server: ${e.userMessage()}"
+        }
     }
 
     fun reserve(spot: ParkingSpot, onReserved: () -> Unit) = launch(showWorking = true) {
+        if (userId == 0) {
+            message = "Please log in to make a reservation"
+            return@launch
+        }
         try {
             reservation = api.reserve(ReservationRequest(spot.id, userId))
             onReserved()
+        } catch (e: Exception) {
+            message = "Reservation failed: ${e.userMessage()}"
         } finally {
-            currentArea?.let { openArea(it.area.id) } // Spot statuses changed, or someone was faster.
+            currentArea?.let { openArea(it.area.id) }
         }
     }
 
     fun exit(onExited: (Reservation) -> Unit) = launch(showWorking = true) {
         val active = reservation ?: return@launch
-        val ended = api.exit(active.id)
-        reservation = null
-        receipt = ended
-        history = listOf(ended) + history.filter { it.id != ended.id }
-        onExited(ended)
+        try {
+            val ended = api.exit(active.id)
+            reservation = null
+            receipt = ended
+            history = listOf(ended) + history.filter { it.id != ended.id }
+            onExited(ended)
+        } catch (e: Exception) {
+            message = "Exit failed: ${e.userMessage()}"
+        }
     }
 
     fun reportIssue(type: IssueType, description: String) = launch(showWorking = true) {
         val active = reservation ?: return@launch
-        api.reportIssue(active.id, IssueRequest(type, description))
-        message = if (type == IssueType.SPOT_TAKEN) {
-            "Report sent. You can mark your exit and choose another spot."
-        } else {
-            "Report sent, thank you"
+        try {
+            api.reportIssue(active.id, IssueRequest(type, description))
+            message = if (type == IssueType.SPOT_TAKEN) {
+                "Report sent. You can mark your exit and choose another spot."
+            } else {
+                "Report sent, thank you"
+            }
+        } catch (e: Exception) {
+            message = "Report failed: ${e.userMessage()}"
         }
     }
 
     fun loadReceipt(id: Int) = launch {
-        receipt = history.firstOrNull { it.id == id } ?: api.reservation(id)
+        try {
+            receipt = history.firstOrNull { it.id == id } ?: api.reservation(id)
+        } catch (e: Exception) {
+            receipt = history.firstOrNull { it.id == id }
+        }
     }
+
+    fun register(name: String, email: String, pass: String, onSuccess: () -> Unit) = launch(showWorking = true) {
+        if (name.isBlank() || email.isBlank() || pass.isBlank()) {
+            message = "Please fill in all fields"
+            return@launch
+        }
+        try {
+            val account = api.register(RegisterRequest(name, email, pass))
+            currentUser = account
+            userId = account.id
+            saveUser(account)
+            refreshReservations()
+            onSuccess()
+        } catch (e: Exception) {
+            message = "Registration failed: ${e.userMessage()}"
+        }
+    }
+
+    fun login(email: String, pass: String, onSuccess: () -> Unit) = launch(showWorking = true) {
+        if (email.isBlank() || pass.isBlank()) {
+            message = "Please fill in all fields"
+            return@launch
+        }
+        try {
+            val account = api.login(LoginRequest(email, pass))
+            currentUser = account
+            userId = account.id
+            saveUser(account)
+            refreshReservations()
+            onSuccess()
+        } catch (e: Exception) {
+            message = "Login failed: ${e.userMessage()}"
+        }
+    }
+
+    fun logout(onSuccess: () -> Unit) {
+        clearLocalSession()
+        onSuccess()
+    }
+
+    /** The server no longer knows this session (app reinstalled, backend restarted...): sign out locally. */
+    private fun expireSession(): String {
+        clearLocalSession()
+        return "Your session has expired. Please log in again."
+    }
+
+    private fun Exception.isSessionExpired() = this is retrofit2.HttpException && code() == 401
+
+    private fun clearLocalSession() {
+        currentUser = null
+        userId = 0
+        val prefs = getApplication<Application>().getSharedPreferences("parking", Context.MODE_PRIVATE)
+        ParkingApi.clearSession(getApplication())
+        prefs.edit().remove("userId").remove("userEmail").remove("userName").remove("userRole").remove("isHandicapped").remove("isEvOwner").remove("isBlocked").apply()
+        history = emptyList()
+        reservation = null
+    }
+
+    fun updateAccount(name: String, email: String, onSuccess: () -> Unit) = launch(showWorking = true) {
+        val current = currentUser
+        if (current == null) {
+            message = "Not logged in"
+            return@launch
+        }
+        try {
+            val csrfToken = api.csrf().token
+            val updated = api.updateUser(current.id, csrfToken, UpdateUserRequest(name, email, current.isHandicapped, current.isEvOwner))
+            currentUser = updated
+            saveUser(updated)
+            message = "Account updated successfully"
+            onSuccess()
+        } catch (e: Exception) {
+            message = if (e.isSessionExpired()) expireSession() else "Account update failed: ${e.userMessage()}"
+        }
+    }
+
+    fun declareStatus(isHandicapped: Boolean, isEvOwner: Boolean, onSuccess: () -> Unit) = launch(showWorking = true) {
+        val current = currentUser
+        if (current == null) {
+            message = "Not logged in"
+            return@launch
+        }
+        try {
+            val csrfToken = api.csrf().token
+            val updated = api.updateUser(current.id, csrfToken, UpdateUserRequest(current.name, current.email, isHandicapped, isEvOwner))
+            currentUser = updated
+            saveUser(updated)
+            message = "Status updated successfully"
+            onSuccess()
+        } catch (e: Exception) {
+            message = if (e.isSessionExpired()) expireSession() else "Status update failed: ${e.userMessage()}"
+        }
+    }
+
+    private fun saveUser(account: UserAccount) {
+        val prefs = getApplication<Application>().getSharedPreferences("parking", Context.MODE_PRIVATE)
+        prefs.edit()
+            .putInt("userId", account.id)
+            .putString("userName", account.name)
+            .putString("userEmail", account.email)
+            .putString("userRole", account.role)
+            .putBoolean("isHandicapped", account.isHandicapped)
+            .putBoolean("isEvOwner", account.isEvOwner)
+            .putBoolean("isBlocked", account.isBlocked)
+            .apply()
+    }
+
+    private fun readStoredUserId(prefs: android.content.SharedPreferences): Int =
+        runCatching { prefs.getInt("userId", 0) }.getOrElse {
+            prefs.getString("userId", null)?.toIntOrNull() ?: 0
+        }
 
     /** Runs [block] and turns any error into a message shown by the screen. */
     private fun launch(showWorking: Boolean = false, block: suspend () -> Unit) = viewModelScope.launch {

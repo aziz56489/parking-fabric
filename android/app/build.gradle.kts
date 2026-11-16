@@ -13,7 +13,9 @@ val localProperties = Properties().apply {
         localPropertiesFile.inputStream().use { load(it) }
     }
 }
-val apiUrl = localProperties.getProperty("api.url") ?: "http://localhost:8080/api/"
+// Android emulators reach services on the development host through 10.0.2.2.
+// Override api.url in local.properties for a physical device or another environment.
+val apiUrl = localProperties.getProperty("api.url") ?: "http://10.0.2.2:8080/api/"
 
 android {
     namespace = "com.parking.app"

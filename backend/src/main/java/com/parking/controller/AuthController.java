@@ -14,10 +14,8 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfToken;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.parking.dto.AuthDtos.UserResponse;
@@ -44,10 +42,11 @@ public class AuthController {
                               HttpServletRequest request,
                               HttpServletResponse response) {
         UserResponse user = userService.login(loginRequest);
-        if (!"ADMIN".equals(user.role())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Administrator access required");
-        }
+        authenticate(user, request, response);
+        return user;
+    }
 
+    private void authenticate(UserResponse user, HttpServletRequest request, HttpServletResponse response) {
         HttpSession existingSession = request.getSession(false);
         if (existingSession != null) {
             request.changeSessionId();
@@ -56,12 +55,11 @@ public class AuthController {
         }
 
         Authentication authentication = new UsernamePasswordAuthenticationToken(
-                user.id(), null, List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
+                user.id(), null, List.of(new SimpleGrantedAuthority("ROLE_" + user.role())));
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
         securityContextRepository.saveContext(context, request, response);
-        return user;
     }
 
     @GetMapping("/me")
@@ -79,13 +77,16 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
     @PostMapping ("/register")
-    public ResponseEntity<UserResponse> register(@RequestBody registerRequest request){
-        UserResponse response = userService.register(request);
+    public ResponseEntity<UserResponse> register(@RequestBody registerRequest request,
+                                                 HttpServletRequest servletRequest,
+                                                 HttpServletResponse servletResponse) {
+        UserResponse user = userService.register(request);
+        authenticate(user, servletRequest, servletResponse);
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                     .path("/{id}")
-                    .buildAndExpand(response.id())
+                    .buildAndExpand(user.id())
                     .toUri();
-        return ResponseEntity.created(location).body(response);
+        return ResponseEntity.created(location).body(user);
     }
     
 }

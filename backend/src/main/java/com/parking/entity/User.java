@@ -31,11 +31,11 @@ public class User {
     @Column (nullable = false)
     private Role role = Role.USER;
     @Column (nullable =false , name = "is_handicapped")
-    private boolean isHandicapped = false;
+    private boolean isHandicapped;
     @Column(name = "is_ev_owner" , nullable = false)
-    private boolean isEvOwner = false;
+    private boolean isEvOwner;
     @Column (name="is_blocked" , nullable = false)
-    private boolean isBlocked = false;
+    private boolean isBlocked;
     public User(String name, String email, String password, Role role) {
         this.name = name;
         this.email = email;

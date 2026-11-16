@@ -29,13 +29,21 @@ public class ParkingArea {
     @OneToMany(mappedBy = "parkingArea", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ParkingSpot> spots = new ArrayList<>();
 
+    /**
+     * Share of usable spots that are taken. A reservation puts a spot in RESERVED
+     * (nothing currently sets OCCUPIED), so both count as taken. Spots marked
+     * NOT_AVAILABLE can't be used, so they are left out of the total.
+     */
     public double getOccupancyRate() {
-        if (spots.isEmpty()) {
+        long usable = spots.stream()
+                .filter(spot -> spot.getStatus() != SpotStatus.NOT_AVAILABLE)
+                .count();
+        if (usable == 0) {
             return 0;
         }
-        long occupied = spots.stream()
-                .filter(spot -> spot.getStatus() == SpotStatus.OCCUPIED)
+        long taken = spots.stream()
+                .filter(spot -> spot.getStatus() == SpotStatus.RESERVED || spot.getStatus() == SpotStatus.OCCUPIED)
                 .count();
-        return (double) occupied / spots.size();
+        return (double) taken / usable;
     }
 }
