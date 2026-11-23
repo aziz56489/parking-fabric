@@ -1,0 +1,69 @@
+<section class="reports">
+  <div class="head">
+    <div>
+      <h2>Ban appeals</h2>
+      <p class="muted">Banned users asking to get their account back. Accepting unbans the user.</p>
+    </div>
+    <button class="ghost" (click)="load()" [disabled]="loading">Refresh</button>
+  </div>
+
+  <div class="filters">
+    @for (f of filters; track f.value) {
+      <button [class.active]="filter === f.value" (click)="filter = f.value">
+        {{ f.label }} <span class="count">{{ count(f.value) }}</span>
+      </button>
+    }
+  </div>
+
+  @if (message) { <p class="banner success">{{ message }}</p> }
+  @if (error) { <p class="banner danger">{{ error }}</p> }
+
+  @if (loading) {
+    <p class="empty">Loading…</p>
+  } @else {
+    @for (a of shown; track a.id) {
+      <article class="card" [class.pending]="a.status === 'PENDING'">
+        <div class="avatar">{{ initials(a.userName) }}</div>
+
+        <div class="info">
+          <div class="title">
+            <strong>{{ a.userName ?? 'User #' + a.userId }}</strong>
+            @if (a.userBlocked) { <span class="pill danger">Banned</span> }
+            @if (a.status === 'ACCEPTED') { <span class="pill success">Accepted</span> }
+            @if (a.status === 'REJECTED') { <span class="pill danger">Rejected</span> }
+          </div>
+          <span class="muted">{{ a.userEmail }}</span>
+          <span class="muted small">Appealed {{ a.createdAt | date: 'd MMM y, HH:mm' }}</span>
+
+          @if (a.banReason) {
+            <p class="ban-reason"><strong>Ban reason:</strong> {{ a.banReason }}</p>
+          }
+          <q class="note">{{ a.message }}</q>
+
+          @if (a.status === 'PENDING') {
+            <textarea class="response" [name]="'response' + a.id" [(ngModel)]="responses[a.id]" maxlength="1000" rows="2"
+                      placeholder="Answer to the user (optional)"></textarea>
+          } @else {
+            @if (a.adminResponse) { <p class="small"><strong>Your answer:</strong> {{ a.adminResponse }}</p> }
+            <span class="muted small">
+              {{ a.status === 'ACCEPTED' ? 'Accepted' : 'Rejected' }}
+              @if (a.resolvedByName) { by {{ a.resolvedByName }} }
+              @if (a.resolvedAt) { on {{ a.resolvedAt | date: 'd MMM y, HH:mm' }} }
+            </span>
+          }
+        </div>
+
+        @if (a.status === 'PENDING') {
+          <div class="side">
+            <div class="actions">
+              <button class="danger outline" (click)="decide(a, 'reject')" [disabled]="busy === a.id">Reject</button>
+              <button class="success" (click)="decide(a, 'accept')" [disabled]="busy === a.id">Accept &amp; unban</button>
+            </div>
+          </div>
+        }
+      </article>
+    } @empty {
+      <p class="empty">{{ filter === 'PENDING' ? 'No appeal to review.' : 'No appeals here.' }}</p>
+    }
+  }
+</section>

@@ -1,5 +1,8 @@
 <div class="page">
-  <h1>Parking areas</h1>
+  <div class="row" style="justify-content: space-between">
+    <h1>Parking areas</h1>
+    <a routerLink="/counter">Ticket counter →</a>
+  </div>
 
   <form class="row" (ngSubmit)="create()">
     <input name="name" [(ngModel)]="newName" placeholder="New parking area name" />
@@ -30,4 +33,8 @@
       </tr>
     }
   </table>
+
+  <app-admin-stats />
+  <app-admin-appeals />
+  <app-admin-reports />
 </div>

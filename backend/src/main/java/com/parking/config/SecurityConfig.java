@@ -30,19 +30,26 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(csrfTokenRepository)
                         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
-                        .ignoringRequestMatchers("/api/reservations/**", "/api/auth/register" , "/api/auth/login"))
+                        // ban-status and appeal check the email and password themselves, like login.
+                        .ignoringRequestMatchers("/api/reservations/**", "/api/auth/register" , "/api/auth/login",
+                                "/api/auth/ban-status", "/api/auth/appeal"))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .authorizeHttpRequests(authorize -> authorize
                         // Let Spring Boot render real error responses (400/404/409...) instead of 403.
                         .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auth/csrf").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register", "/api/auth/logout").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register", "/api/auth/logout",
+                                "/api/auth/ban-status", "/api/auth/appeal").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/parking-areas/**", "/api/parking-spots/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/users").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/users/*").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/users/*").authenticated()
+                        // SCRUM-88: the ticket counter reports non paying users.
+                        .requestMatchers("/api/counter/**").hasAnyRole("TICKET_COUNTER", "ADMIN")
+                        // The admin bans reported users or dismisses the reports.
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/parking-areas/**", "/api/parking-spots/**", "/api/issues")
                         .hasRole("ADMIN")
                         .requestMatchers("/api/reservations/**").permitAll()

@@ -119,6 +119,8 @@ data class UserAccount(
     val isEvOwner: Boolean = false,
     val isBlocked: Boolean = false,
 ) {
+    val isTicketCounter: Boolean get() = role == "TICKET_COUNTER" || role == "ADMIN"
+
     val statusLabel: String
         get() = when {
             isHandicapped -> "Handicapped"
@@ -127,6 +129,76 @@ data class UserAccount(
             else -> "Regular"
         }
 }
+
+/** SCRUM-88: a reservation as the ticket counter sees it, with its driver. */
+@Serializable
+data class CounterReservation(
+    val id: Int,
+    val userId: Int? = null,
+    val userName: String? = null,
+    val userEmail: String? = null,
+    val spotNumber: String,
+    val areaName: String,
+    val startedAt: String,
+    val endedAt: String? = null,
+    val minutes: Long,
+    val amount: Double? = null,
+    val currency: String,
+    val active: Boolean,
+    val reported: Boolean,
+) {
+    /** Only reservations of a registered user can be reported, once. */
+    val canReport: Boolean get() = userId != null && userName != null && !reported
+}
+
+@Serializable
+data class NonPayingReportRequest(val reservationId: Int, val note: String)
+
+@Serializable
+data class NonPayingReport(
+    val id: Int,
+    val reservationId: Int? = null,
+    val userId: Int,
+    val userName: String? = null,
+    val userEmail: String? = null,
+    val ticketCounterName: String? = null,
+    val spotNumber: String? = null,
+    val areaName: String? = null,
+    val amount: Double? = null,
+    val currency: String? = null,
+    val note: String? = null,
+    val reportedAt: String,
+)
+
+/** A banned user's appeal and the admin's answer. */
+@Serializable
+data class BanAppeal(
+    val id: Int,
+    val message: String,
+    val status: String, // PENDING, ACCEPTED or REJECTED
+    val createdAt: String,
+    val adminResponse: String? = null,
+    val resolvedAt: String? = null,
+)
+
+/** Why the admin banned the account, and the latest appeal. Also the body of login's 403 for a banned account. */
+@Serializable
+data class BanInfo(
+    val banned: Boolean,
+    val name: String? = null,
+    val email: String? = null,
+    val reason: String? = null,
+    val bannedAt: String? = null,
+    val appeal: BanAppeal? = null,
+    val canAppeal: Boolean = false,
+)
+
+/** A banned user can't log in, so ban-status and appeal check the email and password. */
+@Serializable
+data class BanStatusRequest(val email: String, val password: String)
+
+@Serializable
+data class AppealRequest(val email: String, val password: String, val message: String)
 
 @Serializable
 data class LoginRequest(val email: String, val password: String)

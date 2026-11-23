@@ -162,6 +162,38 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    // SCRUM-88: As a ticket counter, I can report a non paying user.
+    var counterReservations by mutableStateOf<List<CounterReservation>>(emptyList())
+        private set
+    var nonPayingReports by mutableStateOf<List<NonPayingReport>>(emptyList())
+        private set
+    var counterLoaded by mutableStateOf(false)
+        private set
+
+    fun refreshCounter() = launch {
+        try {
+            counterReservations = api.counterReservations()
+            nonPayingReports = api.nonPayingReports()
+        } catch (e: Exception) {
+            message = if (e.isSessionExpired()) expireSession() else "Cannot load the counter: ${e.userMessage()}"
+        } finally {
+            counterLoaded = true
+        }
+    }
+
+    fun reportNonPaying(reservation: CounterReservation, note: String, onSuccess: () -> Unit) = launch(showWorking = true) {
+        try {
+            val csrfToken = api.csrf().token
+            val report = api.reportNonPaying(csrfToken, NonPayingReportRequest(reservation.id, note.trim()))
+            nonPayingReports = listOf(report) + nonPayingReports
+            counterReservations = counterReservations.map { if (it.id == reservation.id) it.copy(reported = true) else it }
+            message = "${report.userName ?: "The user"} was reported as non paying"
+            onSuccess()
+        } catch (e: Exception) {
+            message = if (e.isSessionExpired()) expireSession() else "Report failed: ${e.userMessage()}"
+        }
+    }
+
     fun loadReceipt(id: Int) = launch {
         try {
             receipt = history.firstOrNull { it.id == id } ?: api.reservation(id)
@@ -187,7 +219,7 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun login(email: String, pass: String, onSuccess: () -> Unit) = launch(showWorking = true) {
+    fun login(email: String, pass: String, onSuccess: () -> Unit, onBanned: () -> Unit) = launch(showWorking = true) {
         if (email.isBlank() || pass.isBlank()) {
             message = "Please fill in all fields"
             return@launch
@@ -200,7 +232,70 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
             refreshReservations()
             onSuccess()
         } catch (e: Exception) {
-            message = "Login failed: ${e.userMessage()}"
+            val body = (e as? retrofit2.HttpException)?.takeIf { it.code() == 403 }
+                ?.let { runCatching { it.response()?.errorBody()?.string() }.getOrNull() }
+            val ban = body?.let(::parseBanInfo)
+            if (ban != null) {
+                banInfo = ban
+                banCredentials = email.trim() to pass
+                onBanned()
+            } else {
+                message = "Login failed: ${body?.let(::errorMessageOf) ?: e.userMessage()}"
+            }
+        }
+    }
+
+    // A banned user sees why and can appeal. They can't log in, so the email and password typed
+    // at login are kept in memory (never saved) while the "account suspended" screen is open.
+    var banInfo by mutableStateOf<BanInfo?>(null)
+        private set
+    private var banCredentials: Pair<String, String>? = null
+
+    fun refreshBanStatus() = launch {
+        val (email, password) = banCredentials ?: return@launch
+        try {
+            banInfo = api.banStatus(BanStatusRequest(email, password))
+        } catch (e: Exception) {
+            message = "Cannot refresh: ${e.userMessage()}"
+        }
+    }
+
+    fun sendAppeal(text: String, onSent: () -> Unit) = launch(showWorking = true) {
+        val (email, password) = banCredentials ?: return@launch
+        if (text.isBlank()) {
+            message = "Please explain why the ban should be lifted"
+            return@launch
+        }
+        try {
+            banInfo = api.appeal(AppealRequest(email, password, text.trim()))
+            message = "Appeal sent. An admin will review it."
+            onSent()
+        } catch (e: Exception) {
+            message = "Appeal failed: ${e.userMessage()}"
+        }
+    }
+
+    /** Leaving the suspended screen forgets the password. */
+    fun leaveBanScreen() {
+        banInfo = null
+        banCredentials = null
+    }
+
+    /** A user banned while logged in: sign out, and send them to login, where they will see why. */
+    fun checkAccount(onBanned: () -> Unit) = launch {
+        if (currentUser == null) return@launch
+        try {
+            val account = api.me()
+            if (account.isBlocked) {
+                clearLocalSession()
+                message = "Your account has been banned. Log in to see why and to appeal."
+                onBanned()
+            } else {
+                currentUser = account
+                saveUser(account)
+            }
+        } catch (e: Exception) {
+            // Offline or session gone: keep the local account; actions will report the problem.
         }
     }
 
@@ -225,6 +320,9 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
         prefs.edit().remove("userId").remove("userEmail").remove("userName").remove("userRole").remove("isHandicapped").remove("isEvOwner").remove("isBlocked").apply()
         history = emptyList()
         reservation = null
+        counterReservations = emptyList()
+        nonPayingReports = emptyList()
+        counterLoaded = false
     }
 
     fun updateAccount(name: String, email: String, onSuccess: () -> Unit) = launch(showWorking = true) {

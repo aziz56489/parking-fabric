@@ -29,4 +29,8 @@ public final class ParkingRequests {
 
     public record IssueRequest(IssueType type, String description) {
     }
+
+    /** SCRUM-88: the reservation the user did not pay for, and an optional note from the ticket counter. */
+    public record NonPayingReportRequest(Integer reservationId, String note) {
+    }
 }

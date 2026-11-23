@@ -34,12 +34,12 @@ export class LoginComponent {
       next: () => {
         this.loading = false;
         const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
-        this.router.navigateByUrl(returnUrl?.startsWith('/') ? returnUrl : '/');
+        this.router.navigateByUrl(returnUrl?.startsWith('/') ? returnUrl : this.auth.homeUrl);
       },
       error: (err: unknown) => {
         this.loading = false;
         if (err instanceof Error && err.message.startsWith('Access denied')) {
-          this.error = 'Access denied. Only administrator accounts can access this application.';
+          this.error = 'Access denied. Only administrator and ticket counter accounts can access this application.';
         } else if (err instanceof HttpErrorResponse) {
           if (err.status === 0) {
             this.error = 'Cannot reach the server. Make sure the backend is running.';

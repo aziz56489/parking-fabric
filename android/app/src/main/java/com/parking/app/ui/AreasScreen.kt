@@ -58,6 +58,7 @@ fun AreasScreen(
     onOpenReservation: () -> Unit,
     onOpenReceipts: () -> Unit,
     onOpenProfile: () -> Unit,
+    onBanned: () -> Unit,
 ) {
     val context = LocalContext.current
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -79,6 +80,7 @@ fun AreasScreen(
 
     var askedForLocation by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) {
+        vm.checkAccount(onBanned) // banned since the last login?
         vm.refreshAreas()
         vm.refreshReservations()
         if (!askedForLocation) {

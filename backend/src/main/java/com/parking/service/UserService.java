@@ -28,12 +28,19 @@ public class UserService {
     private static final Logger log= LoggerFactory.getLogger(UserService.class);
     private final UserRepository userRepository;
     private final PasswordEncoderService passwordEncoderService;
+    private final BanService banService;
     @Value("${parking.admin.name:System Administrator}")
     private String adminName;
     @Value("${parking.admin.email:admin@parking.com}")
     private String adminEmail;
     @Value("${parking.admin.password:admin123}")
     private String adminPassword;
+    @Value("${parking.counter.name:Ticket Counter}")
+    private String counterName;
+    @Value("${parking.counter.email:counter@parking.com}")
+    private String counterEmail;
+    @Value("${parking.counter.password:counter123}")
+    private String counterPassword;
     @PostConstruct 
     public void initDefaultAdmin(){
         if(userRepository.countByRole(Role.ADMIN) == 0){
@@ -51,6 +58,24 @@ public class UserService {
             userRepository.save(defaultAdmin);
             log.info("Default administrator created: email={}", adminEmail);
         }
+        initDefaultTicketCounter();
+    }
+
+    /** SCRUM-88: users can only register as USER, so create one ticket counter account if there is none. */
+    private void initDefaultTicketCounter() {
+        if (userRepository.countByRole(Role.TICKET_COUNTER) > 0) {
+            return;
+        }
+        if (counterPassword == null || counterPassword.isBlank()) {
+            log.warn("No ticket counter exists and parking.counter.password is not configured; skipping ticket counter bootstrap");
+            return;
+        }
+        if (userRepository.existsByEmailIgnoreCase(counterEmail)) {
+            log.warn("Cannot create the default ticket counter: {} is already used by another account", counterEmail);
+            return;
+        }
+        userRepository.save(new User(counterName, counterEmail, passwordEncoderService.encode(counterPassword), Role.TICKET_COUNTER));
+        log.info("Default ticket counter created: email={}", counterEmail);
     }
     public UserResponse login(loginRequest request){
         if(request == null || request .email() == null || request.password() == null){
@@ -64,7 +89,8 @@ public class UserService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
         } 
         if (user.isBlocked()){
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN , "Account is blocked. Please contact support");
+            // The app shows the ban reason and lets the user appeal.
+            throw new AccountBannedException(banService.banInfo(user));
         }
         return UserResponse.from(user);
     }

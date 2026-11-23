@@ -1,0 +1,108 @@
+<div class="counter">
+  <header class="hero">
+    <div class="hero-top">
+      <div>
+        <h1>Ticket counter</h1>
+        <p>Report drivers who leave without paying.</p>
+      </div>
+      <div class="hero-actions">
+        @if (auth.isAdmin) {
+          <a routerLink="/" class="ghost">Parking areas</a>
+        }
+        <button class="ghost" (click)="load()" [disabled]="loading">Refresh</button>
+        <button class="ghost" (click)="logout()">Log out</button>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><strong>{{ parkedNow }}</strong><span>parked now</span></div>
+      <div class="stat"><strong>{{ recentExits }}</strong><span>recent exits</span></div>
+      <div class="stat"><strong>{{ reports.length }}</strong><span>reported</span></div>
+    </div>
+
+    <div class="tabs">
+      <button [class.active]="tab === 'reservations'" (click)="tab = 'reservations'">Reservations</button>
+      <button [class.active]="tab === 'reports'" (click)="tab = 'reports'">Reports ({{ reports.length }})</button>
+    </div>
+  </header>
+
+  <main class="content">
+    <input class="search" name="query" [(ngModel)]="query" placeholder="Search name, email or spot" />
+
+    @if (message) { <p class="banner success">{{ message }}</p> }
+    @if (error) { <p class="banner danger">{{ error }}</p> }
+
+    @if (loading) {
+      <p class="empty">Loading…</p>
+    } @else if (tab === 'reservations') {
+      @for (r of filteredReservations; track r.id) {
+        <div class="card">
+          <div class="avatar">{{ initials(r.userName) }}</div>
+          <div class="info">
+            <strong>{{ r.userName ?? 'Guest (no account)' }}</strong>
+            <span class="muted">{{ r.userEmail ?? 'Cannot be reported' }}</span>
+            <span class="muted small">
+              {{ r.areaName }} · Spot {{ r.spotNumber }} · {{ r.startedAt | date: 'd MMM, HH:mm' }} · {{ duration(r.minutes) }}
+            </span>
+          </div>
+          <div class="side">
+            @if (r.active) {
+              <span class="pill warning">Parked</span>
+            } @else if (r.amount !== null) {
+              <span class="amount">{{ r.amount | currency: r.currency : 'code' : '1.0-3' }}</span>
+            }
+            @if (r.reported) {
+              <span class="pill danger">Reported as non paying</span>
+            } @else if (canReport(r)) {
+              <button class="report" (click)="openReport(r)">Report non-payment</button>
+            }
+          </div>
+        </div>
+      } @empty {
+        <p class="empty">No reservations.</p>
+      }
+    } @else {
+      @for (r of filteredReports; track r.id) {
+        <div class="card">
+          <div class="avatar danger">{{ initials(r.userName) }}</div>
+          <div class="info">
+            <strong>{{ r.userName ?? 'User #' + r.userId }}</strong>
+            <span class="muted">{{ r.userEmail }}</span>
+            <span class="muted small">
+              {{ r.areaName }} · Spot {{ r.spotNumber }} · {{ r.reportedAt | date: 'd MMM, HH:mm' }}
+              @if (r.ticketCounterName) { · by {{ r.ticketCounterName }} }
+            </span>
+            @if (r.note) { <q class="note">{{ r.note }}</q> }
+          </div>
+          <div class="side">
+            @if (r.amount !== null && r.currency) {
+              <span class="pill danger">{{ r.amount | currency: r.currency : 'code' : '1.0-3' }}</span>
+            }
+          </div>
+        </div>
+      } @empty {
+        <p class="empty">No reports yet.</p>
+      }
+    }
+  </main>
+
+  @if (reporting) {
+    <div class="backdrop" (click)="cancelReport()">
+      <form class="dialog" (click)="$event.stopPropagation()" (ngSubmit)="sendReport()">
+        <h2>Report {{ reporting.userName }}?</h2>
+        <p class="muted">
+          {{ reporting.userEmail }}<br />
+          {{ reporting.areaName }} · Spot {{ reporting.spotNumber }}
+          @if (reporting.amount !== null) { · {{ reporting.amount | currency: reporting.currency : 'code' : '1.0-3' }} }
+        </p>
+        <p>This user will be reported for leaving without paying.</p>
+        <textarea name="note" [(ngModel)]="note" maxlength="1000" rows="3"
+                  placeholder="Note (optional), e.g. left through the barrier without paying"></textarea>
+        <div class="dialog-actions">
+          <button type="button" class="ghost-dark" (click)="cancelReport()">Cancel</button>
+          <button type="submit" class="report" [disabled]="sending">{{ sending ? 'Sending…' : 'Report' }}</button>
+        </div>
+      </form>
+    </div>
+  }
+</div>

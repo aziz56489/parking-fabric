@@ -85,4 +85,40 @@ class LogicTest {
         assertTrue(formatMoney(0.025, "TND").contains("025")) // TND has 3 decimals
         assertTrue(formatMoney(1.5, "EUR").contains("50"))
     }
+
+    @Test
+    fun onlyRegisteredUnreportedReservationsCanBeReportedAsNonPaying() {
+        // SCRUM-88: the counter reads the backend's JSON, including fields it does not use.
+        val body = """{"id":7,"userId":3,"userName":"Sami","userEmail":"sami@x.tn","spotNumber":"A-01","areaName":"Lac",
+            "startedAt":"2026-11-23T08:00:00Z","endedAt":"2026-11-23T09:00:00Z","minutes":60,"amount":1.5,
+            "currency":"TND","active":false,"reported":false,"extra":1}"""
+        val reservation = json.decodeFromString<CounterReservation>(body)
+        assertTrue(reservation.canReport)
+        assertFalse(reservation.copy(reported = true).canReport)
+        assertFalse(reservation.copy(userId = null, userName = null).canReport) // guest reservation
+    }
+
+    @Test
+    fun ticketCounterRole() {
+        assertTrue(UserAccount(1, "Desk", "c@p.com", role = "TICKET_COUNTER").isTicketCounter)
+        assertTrue(UserAccount(1, "Boss", "a@p.com", role = "ADMIN").isTicketCounter)
+        assertFalse(UserAccount(1, "Driver", "d@p.com").isTicketCounter)
+    }
+
+    @Test
+    fun bannedLoginBodyIsReadAsBanInfo() {
+        // The backend's 403 for a banned account: the reason and the latest (rejected) appeal.
+        val body = """{"banned":true,"message":"Your account is banned","name":"Sami","email":"sami@x.tn",
+            "reason":"Left 3 times without paying","bannedAt":"2026-11-20T10:00:00Z",
+            "appeal":{"id":4,"message":"I paid later","status":"REJECTED","createdAt":"2026-11-21T09:00:00Z",
+            "adminResponse":"No payment found","resolvedAt":"2026-11-22T09:00:00Z"},"canAppeal":true}"""
+        val ban = parseBanInfo(body)!!
+        assertEquals("Left 3 times without paying", ban.reason)
+        assertEquals("REJECTED", ban.appeal!!.status)
+        assertEquals("No payment found", ban.appeal!!.adminResponse)
+        assertTrue(ban.canAppeal)
+        // Any other 403 (e.g. a permission error) is not a ban.
+        assertNull(parseBanInfo("""{"message":"Forbidden","status":403}"""))
+        assertEquals("Forbidden", errorMessageOf("""{"message":"Forbidden","status":403}"""))
+    }
 }

@@ -18,6 +18,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.parking.app.ui.AreasScreen
+import com.parking.app.ui.BannedScreen
 import com.parking.app.ui.DeclareStatusScreen
 import com.parking.app.ui.EditAccountScreen
 import com.parking.app.ui.LoginScreen
@@ -27,6 +28,7 @@ import com.parking.app.ui.ReceiptScreen
 import com.parking.app.ui.ReceiptsScreen
 import com.parking.app.ui.RegisterScreen
 import com.parking.app.ui.ReservationScreen
+import com.parking.app.ui.TicketCounterScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,6 +62,17 @@ fun ParkingApp(vm: ParkingViewModel = viewModel()) {
                 onOpenReservation = { nav.navigate("reservation") },
                 onOpenReceipts = { nav.navigate("receipts") },
                 onOpenProfile = { nav.navigate(if (vm.isLoggedIn) "profile" else "login") },
+                // Banned while logged in: start again from login, which shows the ban.
+                onBanned = { nav.navigate("login") { popUpTo(nav.graph.id) { inclusive = true } } },
+            )
+        }
+        composable("banned") {
+            BannedScreen(
+                vm,
+                onBack = {
+                    vm.leaveBanScreen()
+                    if (!nav.popBackStack("login", inclusive = false)) nav.navigate("login")
+                },
             )
         }
         composable("plan/{areaId}") { entry ->
@@ -90,6 +103,15 @@ fun ParkingApp(vm: ParkingViewModel = viewModel()) {
                 onNavigateLogin = { nav.navigate("login") },
                 onNavigateEdit = { nav.navigate("edit_account") },
                 onNavigateDeclareStatus = { nav.navigate("declare_status") },
+                onNavigateCounter = { nav.navigate("counter") { launchSingleTop = true } },
+            )
+        }
+        composable("counter") {
+            TicketCounterScreen(
+                vm,
+                onBack = if (nav.previousBackStackEntry != null) ({ nav.popBackStack() }) else null,
+                onOpenProfile = { nav.navigate(if (vm.isLoggedIn) "profile" else "login") },
+                onNavigateLogin = { nav.navigate("login") },
             )
         }
         composable("login") {
@@ -98,11 +120,13 @@ fun ParkingApp(vm: ParkingViewModel = viewModel()) {
                 // Login is the start screen: only offer "back" when there is somewhere to go back to.
                 onBack = if (nav.previousBackStackEntry != null) ({ nav.popBackStack() }) else null,
                 onLoggedIn = {
-                    nav.navigate("areas") {
+                    // SCRUM-88: ticket counters start on their desk.
+                    nav.navigate(if (vm.currentUser?.role == "TICKET_COUNTER") "counter" else "areas") {
                         popUpTo("login") { inclusive = true }
                     }
                 },
                 onNavigateRegister = { nav.navigate("register") },
+                onBanned = { nav.navigate("banned") { launchSingleTop = true } },
             )
         }
         composable("register") {

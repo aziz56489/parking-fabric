@@ -21,7 +21,13 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import com.parking.dto.AuthDtos.UserResponse;
 import com.parking.dto.AuthDtos.loginRequest;
 import com.parking.dto.AuthDtos.registerRequest;
+import com.parking.dto.BanDtos.AppealRequest;
+import com.parking.dto.BanDtos.BanInfo;
+import com.parking.dto.BanDtos.BanStatusRequest;
+import com.parking.service.AccountBannedException;
+import com.parking.service.BanService;
 import com.parking.service.UserService;
+import org.springframework.http.HttpStatus;
 
 import lombok.RequiredArgsConstructor;
 
@@ -30,6 +36,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor 
 public class AuthController {
     private final UserService userService;
+    private final BanService banService;
     private final SecurityContextRepository securityContextRepository;
 
     @GetMapping("/csrf")
@@ -60,6 +67,23 @@ public class AuthController {
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
         securityContextRepository.saveContext(context, request, response);
+    }
+
+    /** A banned user can't log in: answer 403 with the ban reason and appeal, for the app's suspended screen. */
+    @ExceptionHandler(AccountBannedException.class)
+    public ResponseEntity<BanInfo> banned(AccountBannedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getBanInfo());
+    }
+
+    @PostMapping("/ban-status")
+    public BanInfo banStatus(@RequestBody BanStatusRequest request) {
+        return banService.status(request);
+    }
+
+    @PostMapping("/appeal")
+    @ResponseStatus(HttpStatus.CREATED)
+    public BanInfo appeal(@RequestBody AppealRequest request) {
+        return banService.appeal(request);
     }
 
     @GetMapping("/me")

@@ -13,6 +13,8 @@ CREATE TABLE users (
   is_handicapped BOOLEAN      NOT NULL DEFAULT FALSE,
   is_ev_owner    BOOLEAN      NOT NULL DEFAULT FALSE,
   is_blocked     BOOLEAN      NOT NULL DEFAULT FALSE,
+  ban_reason     VARCHAR(1000),                   -- written by the admin, shown to the banned user
+  banned_at      DATETIME,
   PRIMARY KEY (id),
   UNIQUE KEY uk_users_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -113,9 +115,38 @@ CREATE TABLE non_paying_report (
   id                INT           NOT NULL AUTO_INCREMENT,
   ticket_counter_id INT           NOT NULL,
   user_id           INT           NOT NULL,
+  reservation_id    INT,                             -- the stay that was not paid; one report per reservation
+  spot_number       VARCHAR(20),                     -- copied from the reservation, like the receipt
+  area_name         VARCHAR(255),
+  amount            DECIMAL(10,3),
+  currency          VARCHAR(3),
   reported_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   note              VARCHAR(1000),
+  -- Admin review: ban the user (BANNED, sets users.is_blocked) or let it go (DISMISSED).
+  status            ENUM('PENDING', 'BANNED', 'DISMISSED') NOT NULL DEFAULT 'PENDING',
+  resolved_by_id    INT,
+  resolved_at       DATETIME,
   PRIMARY KEY (id),
+  UNIQUE KEY uk_non_paying_report_reservation (reservation_id),
+  CONSTRAINT fk_non_paying_report_resolved_by FOREIGN KEY (resolved_by_id) REFERENCES users (id) ON DELETE SET NULL,
   CONSTRAINT fk_non_paying_report_counter FOREIGN KEY (ticket_counter_id) REFERENCES users (id),
-  CONSTRAINT fk_non_paying_report_user FOREIGN KEY (user_id) REFERENCES users (id)
+  CONSTRAINT fk_non_paying_report_user FOREIGN KEY (user_id) REFERENCES users (id),
+  CONSTRAINT fk_non_paying_report_reservation FOREIGN KEY (reservation_id) REFERENCES reservation (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- User 1 --appeals-- 0..* BanAppeal: a banned user asks the admin to lift the ban.
+CREATE TABLE ban_appeal (
+  id             INT           NOT NULL AUTO_INCREMENT,
+  user_id        INT           NOT NULL,
+  message        VARCHAR(1000) NOT NULL,
+  ban_reason     VARCHAR(1000),                    -- the reason at the time of the appeal
+  status         ENUM('PENDING', 'ACCEPTED', 'REJECTED') NOT NULL DEFAULT 'PENDING',
+  created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  admin_response VARCHAR(1000),                    -- optional answer, shown to the user
+  resolved_by_id INT,
+  resolved_at    DATETIME,
+  PRIMARY KEY (id),
+  KEY idx_ban_appeal_user (user_id, created_at),
+  CONSTRAINT fk_ban_appeal_user FOREIGN KEY (user_id) REFERENCES users (id),
+  CONSTRAINT fk_ban_appeal_resolved_by FOREIGN KEY (resolved_by_id) REFERENCES users (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -36,6 +36,23 @@ public class User {
     private boolean isEvOwner;
     @Column (name="is_blocked" , nullable = false)
     private boolean isBlocked;
+    /** Why the admin banned this user; shown to the user in the app. Null when not banned. */
+    @Column (name = "ban_reason", length = 1000)
+    private String banReason;
+    @Column (name = "banned_at")
+    private java.time.Instant bannedAt;
+
+    public void ban(String reason) {
+        this.isBlocked = true;
+        this.banReason = reason;
+        this.bannedAt = java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+    }
+
+    public void unban() {
+        this.isBlocked = false;
+        this.banReason = null;
+        this.bannedAt = null;
+    }
     public User(String name, String email, String password, Role role) {
         this.name = name;
         this.email = email;

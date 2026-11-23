@@ -20,6 +20,9 @@ export interface LoginRequest {
 const STORAGE_KEY = 'parking_admin_user';
 const API_BASE = 'http://localhost:8080/api';
 
+/** Accounts allowed in this web app. Drivers (USER) use the mobile app. */
+const STAFF_ROLES = ['ADMIN', 'TICKET_COUNTER'];
+
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private http = inject(HttpClient);
@@ -45,6 +48,15 @@ export class AuthService {
     return this._currentUser !== null;
   }
 
+  get isTicketCounter(): boolean {
+    return this._currentUser?.role === 'TICKET_COUNTER';
+  }
+
+  /** Where a user lands after signing in: admins manage areas, ticket counters work at their desk. */
+  get homeUrl(): string {
+    return this.isTicketCounter ? '/counter' : '/';
+  }
+
   get isAdmin(): boolean {
     return this._currentUser?.role === 'ADMIN';
   }
@@ -53,8 +65,8 @@ export class AuthService {
     return this.http.get(`${API_BASE}/auth/csrf`).pipe(
       switchMap(() => this.http.post<User>(`${API_BASE}/auth/login`, { email, password })),
       tap(user => {
-        if (user.role !== 'ADMIN') {
-          throw new Error('Access denied: admin accounts only');
+        if (!STAFF_ROLES.includes(user.role)) {
+          throw new Error('Access denied: staff accounts only');
         }
         this._currentUser = user;
         sessionStorage.setItem(STORAGE_KEY, JSON.stringify(user));
@@ -63,7 +75,7 @@ export class AuthService {
   }
 
   validateSession(): Observable<boolean> {
-    if (!this._currentUser || this._currentUser.role !== 'ADMIN') return of(false);
+    if (!this._currentUser || !STAFF_ROLES.includes(this._currentUser.role)) return of(false);
     return this.http.get<User>(`${API_BASE}/auth/me`).pipe(
       tap(user => {
         this._currentUser = user;

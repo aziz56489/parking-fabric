@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -49,6 +50,7 @@ fun ProfileScreen(
     onNavigateLogin: () -> Unit,
     onNavigateEdit: () -> Unit,
     onNavigateDeclareStatus: () -> Unit,
+    onNavigateCounter: () -> Unit,
 ) {
     val user = vm.currentUser
 
@@ -102,6 +104,10 @@ fun ProfileScreen(
                     MenuRow(Icons.Default.Edit, "Change my account details", "Name and email", onNavigateEdit)
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
                     MenuRow(Icons.Default.Star, "Declare status", "Handicapped or EV owner", onNavigateDeclareStatus)
+                    if (user.isTicketCounter) {
+                        HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                        MenuRow(Icons.Default.Warning, "Ticket counter desk", "Report non paying users", onNavigateCounter)
+                    }
                 }
 
                 SoftButton(

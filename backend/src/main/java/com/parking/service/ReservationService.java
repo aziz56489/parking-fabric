@@ -6,9 +6,11 @@ import com.parking.entity.IssueReport;
 import com.parking.entity.ParkingSpot;
 import com.parking.entity.Reservation;
 import com.parking.entity.SpotStatus;
+import com.parking.entity.User;
 import com.parking.repository.IssueReportRepository;
 import com.parking.repository.ParkingSpotRepository;
 import com.parking.repository.ReservationRepository;
+import com.parking.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -24,17 +26,20 @@ public class ReservationService {
     private final ReservationRepository reservationRepository;
     private final ParkingSpotRepository parkingSpotRepository;
     private final IssueReportRepository issueReportRepository;
+    private final UserRepository userRepository;
     private final BigDecimal pricePerHour;
     private final String currency;
 
     public ReservationService(ReservationRepository reservationRepository,
                               ParkingSpotRepository parkingSpotRepository,
                               IssueReportRepository issueReportRepository,
+                              UserRepository userRepository,
                               @Value("${parking.price-per-hour}") BigDecimal pricePerHour,
                               @Value("${parking.currency}") String currency) {
         this.reservationRepository = reservationRepository;
         this.parkingSpotRepository = parkingSpotRepository;
         this.issueReportRepository = issueReportRepository;
+        this.userRepository = userRepository;
         this.pricePerHour = pricePerHour;
         this.currency = currency;
     }
@@ -43,6 +48,10 @@ public class ReservationService {
     public Reservation reserve(ReservationRequest request) {
         if (request == null || request.spotId() == null || request.userId() == null || request.userId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "spotId and userId are required");
+        }
+        // A user banned after a non paying report may still have an open session on the phone.
+        if (isBlocked(request.userId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Your account is blocked. Please contact support");
         }
         if (reservationRepository.existsByUserIdAndEndedAtIsNull(request.userId())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "You already have an active reservation");
@@ -53,6 +62,14 @@ public class ReservationService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Spot " + spot.getNumber() + " is not available");
         }
         return reservationRepository.save(new Reservation(request.userId(), spot, pricePerHour, currency));
+    }
+
+    private boolean isBlocked(String userId) {
+        try {
+            return userRepository.findById(Integer.valueOf(userId.trim())).map(User::isBlocked).orElse(false);
+        } catch (NumberFormatException e) {
+            return false; // old app builds used a random id, not an account
+        }
     }
 
     public Reservation getReservation(int id) {

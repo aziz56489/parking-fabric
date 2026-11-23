@@ -23,6 +23,7 @@ fun LoginScreen(
     onBack: (() -> Unit)?,
     onLoggedIn: () -> Unit,
     onNavigateRegister: () -> Unit,
+    onBanned: () -> Unit,
 ) {
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
@@ -40,7 +41,7 @@ fun LoginScreen(
         AppTextField(password, { password = it }, "Password", Icons.Default.Lock, keyboardType = KeyboardType.Password, password = true)
         GradientButton(
             "Log in",
-            onClick = { vm.login(email, password, onLoggedIn) },
+            onClick = { vm.login(email, password, onLoggedIn, onBanned) },
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             enabled = !vm.working,
             loading = vm.working,

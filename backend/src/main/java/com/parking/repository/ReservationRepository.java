@@ -12,4 +12,13 @@ public interface ReservationRepository extends JpaRepository<Reservation, Intege
     boolean existsBySpotIdAndEndedAtIsNull(Integer spotId);
 
     List<Reservation> findByUserIdOrderByStartedAtDesc(String userId);
+
+    /** The most recent reservations, for the ticket counter. */
+    List<Reservation> findTop100ByOrderByStartedAtDesc();
+
+    /** Paid stays (earnings are counted on the exit date). */
+    List<Reservation> findByEndedAtGreaterThanEqual(java.time.Instant from);
+
+    /** Entries (a reservation starts when the driver enters). */
+    List<Reservation> findByStartedAtGreaterThanEqual(java.time.Instant from);
 }

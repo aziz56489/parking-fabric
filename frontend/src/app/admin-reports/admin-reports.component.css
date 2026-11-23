@@ -1,0 +1,299 @@
+.reports {
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.head p {
+  margin: 4px 0 0;
+}
+
+.muted {
+  color: #64748b;
+}
+
+.small {
+  font-size: 12px;
+}
+
+.filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.filters button,
+.ghost,
+.secondary,
+.danger {
+  border: none;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.filters button {
+  background: white;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+}
+
+.filters button.active {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: white;
+}
+
+.count {
+  margin-left: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.15);
+  font-size: 12px;
+}
+
+.filters button.active .count {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.ghost,
+.secondary {
+  background: #e0e7ff;
+  color: #1e1b4b;
+}
+
+.danger {
+  background: #e11d48;
+  color: white;
+}
+
+.danger.outline {
+  background: #ffe4e6;
+  color: #881337;
+}
+
+.card {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  background: white;
+  border-radius: 20px;
+  padding: 16px 18px;
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.08);
+  border-left: 4px solid transparent;
+}
+
+.card.pending {
+  border-left-color: #f59e0b;
+}
+
+.avatar {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  color: #e11d48;
+  background: rgba(225, 29, 72, 0.12);
+}
+
+.info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.note {
+  margin: 6px 0 2px;
+  padding: 8px 12px;
+  background: #f1f3f9;
+  border-radius: 10px;
+}
+
+.pill {
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pill.danger {
+  background: rgba(225, 29, 72, 0.12);
+  color: #e11d48;
+}
+
+.pill.warning {
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.amount {
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.actions {
+  display: flex;
+  gap: 6px;
+}
+
+.banner {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+}
+
+.banner.success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.banner.danger {
+  background: #ffe4e6;
+  color: #881337;
+}
+
+.empty {
+  text-align: center;
+  color: #64748b;
+  padding: 28px;
+  background: white;
+  border-radius: 20px;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  z-index: 10;
+}
+
+.dialog {
+  background: white;
+  border-radius: 24px;
+  padding: 24px;
+  max-width: 420px;
+  width: 100%;
+}
+
+.dialog h3 {
+  margin: 0 0 4px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+@media (max-width: 640px) {
+  .card {
+    flex-wrap: wrap;
+  }
+
+  .side {
+    width: 100%;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+}
+
+.ban-reason {
+  margin: 6px 0 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #ffe4e6;
+  color: #881337;
+}
+
+.reason-label {
+  display: block;
+  margin-top: 12px;
+  font-weight: 600;
+}
+
+.dialog textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  font: inherit;
+  resize: vertical;
+}
+
+.danger:disabled,
+.secondary:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Shared with the appeals panel. */
+.pill.success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+button.success {
+  border: none;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  background: #059669;
+  color: white;
+}
+
+button.success:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.response {
+  margin-top: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  font: inherit;
+  resize: vertical;
+}

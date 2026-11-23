@@ -55,6 +55,16 @@ interface ParkingApi {
     @GET("auth/csrf")
     suspend fun csrf(): CsrfResponse
 
+    /** The logged-in account as the server knows it now (e.g. banned since the last login). */
+    @GET("auth/me")
+    suspend fun me(): UserAccount
+
+    @POST("auth/ban-status")
+    suspend fun banStatus(@Body request: BanStatusRequest): BanInfo
+
+    @POST("auth/appeal")
+    suspend fun appeal(@Body request: AppealRequest): BanInfo
+
     @GET("users/{id}")
     suspend fun getUser(@Path("id") id: Int): UserAccount
 
@@ -64,6 +74,19 @@ interface ParkingApi {
         @Header("X-XSRF-TOKEN") csrfToken: String,
         @Body request: UpdateUserRequest,
     ): UserAccount
+
+    // SCRUM-88: ticket counter (TICKET_COUNTER or ADMIN role only).
+    @GET("counter/reservations")
+    suspend fun counterReservations(): List<CounterReservation>
+
+    @GET("counter/non-paying-reports")
+    suspend fun nonPayingReports(): List<NonPayingReport>
+
+    @POST("counter/non-paying-reports")
+    suspend fun reportNonPaying(
+        @Header("X-XSRF-TOKEN") csrfToken: String,
+        @Body request: NonPayingReportRequest,
+    ): NonPayingReport
 
     companion object {
         fun create(context: Context, baseUrl: String = BuildConfig.API_URL): ParkingApi = Retrofit.Builder()
@@ -142,6 +165,14 @@ private class SessionCookieJar private constructor(private val prefs: SharedPref
         }
     }
 }
+
+/** Login answers 403 with the ban details for a banned account: returns them, or null for any other error body. */
+fun parseBanInfo(errorBody: String): BanInfo? =
+    runCatching { json.decodeFromString<BanInfo>(errorBody) }.getOrNull()?.takeIf { it.banned }
+
+/** The {"message": "..."} of an error body already read. */
+fun errorMessageOf(errorBody: String): String? =
+    runCatching { json.parseToJsonElement(errorBody).jsonObject["message"]!!.jsonPrimitive.content }.getOrNull()
 
 /** The backend sends {"message": "..."} with its errors (server.error.include-message=always). Reads the error body, so call it once. */
 fun Throwable.userMessage(): String = when (this) {

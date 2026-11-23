@@ -1,0 +1,88 @@
+<section class="stats">
+  <h2>Statistics</h2>
+
+  <!-- SCRUM-81: earnings -->
+  <div class="panel">
+    <div class="panel-head">
+      <div>
+        <h3>Earnings</h3>
+        <p class="muted">Paid when drivers exit · {{ periodWindow }}</p>
+      </div>
+      <div class="segmented" role="tablist" aria-label="Earnings period">
+        @for (p of periods; track p.value) {
+          <button role="tab" [attr.aria-selected]="period === p.value" [class.active]="period === p.value"
+                  (click)="setPeriod(p.value)">{{ p.label }}</button>
+        }
+      </div>
+    </div>
+
+    @if (earningsError) {
+      <p class="error">{{ earningsError }}</p>
+    } @else if (earnings) {
+      <div class="tiles">
+        <div class="tile"><span>Today</span><strong>{{ money(earnings.today) }}</strong></div>
+        <div class="tile"><span>This month</span><strong>{{ money(earnings.thisMonth) }}</strong></div>
+        <div class="tile"><span>This year</span><strong>{{ money(earnings.thisYear) }}</strong></div>
+      </div>
+      <app-bar-chart [points]="earningPoints" [format]="money"
+                     [labelHeader]="period === 'DAY' ? 'Day' : period === 'MONTH' ? 'Month' : 'Year'"
+                     valueHeader="Earnings"
+                     [ariaLabel]="'Earnings per ' + period.toLowerCase() + ', ' + periodWindow" />
+    } @else {
+      <p class="muted">Loading…</p>
+    }
+  </div>
+
+  <!-- SCRUM-80: daily rate of entry -->
+  <div class="panel">
+    <div class="panel-head">
+      <div>
+        <h3>Daily entries</h3>
+        <p class="muted">Drivers entering {{ selectedAreaName }} · last 30 days</p>
+      </div>
+      <select name="area" [(ngModel)]="areaId" (ngModelChange)="loadEntries()" aria-label="Parking area">
+        <option [ngValue]="null">All parking areas</option>
+        @for (a of areas; track a.id) {
+          <option [ngValue]="a.id">{{ a.name }}</option>
+        }
+      </select>
+    </div>
+
+    @if (entriesError) {
+      <p class="error">{{ entriesError }}</p>
+    } @else if (entries) {
+      <div class="tiles">
+        <div class="tile"><span>Today</span><strong>{{ entries.today }}</strong></div>
+        <div class="tile"><span>Average per day</span><strong>{{ whole(entries.averagePerDay) }}</strong></div>
+        <div class="tile">
+          <span>Busiest day</span>
+          <strong>{{ entries.peak ? entries.peak.entries : '—' }}</strong>
+          @if (entries.peak) { <em>{{ entries.peak.label }}</em> }
+        </div>
+      </div>
+      <app-bar-chart [points]="entryPoints" labelHeader="Day" valueHeader="Entries"
+                     [ariaLabel]="'Entries per day for ' + selectedAreaName + ', last 30 days'" />
+
+      <h4>By parking area</h4>
+      <table class="areas">
+        <thead>
+          <tr><th>Parking area</th><th class="num">Today</th><th class="num">Last 30 days</th><th class="num">Per day</th></tr>
+        </thead>
+        <tbody>
+          @for (a of entries.areas; track a.areaId) {
+            <tr [class.selected]="a.areaId === areaId" (click)="areaId = a.areaId; loadEntries()">
+              <td>{{ a.areaName }}</td>
+              <td class="num">{{ a.today }}</td>
+              <td class="num">{{ a.total }}</td>
+              <td class="num">{{ whole(a.averagePerDay) }}</td>
+            </tr>
+          } @empty {
+            <tr><td colspan="4" class="muted">No parking area yet.</td></tr>
+          }
+        </tbody>
+      </table>
+    } @else {
+      <p class="muted">Loading…</p>
+    }
+  </div>
+</section>

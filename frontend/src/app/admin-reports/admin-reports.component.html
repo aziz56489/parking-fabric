@@ -1,0 +1,97 @@
+<section class="reports">
+  <div class="head">
+    <div>
+      <h2>Non paying reports</h2>
+      <p class="muted">Filed by the ticket counters. Ban the user, or let it go.</p>
+    </div>
+    <button class="ghost" (click)="load()" [disabled]="loading">Refresh</button>
+  </div>
+
+  <div class="filters">
+    @for (f of filters; track f.value) {
+      <button [class.active]="filter === f.value" (click)="filter = f.value">
+        {{ f.label }} <span class="count">{{ count(f.value) }}</span>
+      </button>
+    }
+  </div>
+
+  @if (message) { <p class="banner success">{{ message }}</p> }
+  @if (error) { <p class="banner danger">{{ error }}</p> }
+
+  @if (loading) {
+    <p class="empty">Loading…</p>
+  } @else {
+    @for (r of shown; track r.id) {
+      <article class="card" [class.pending]="r.status === 'PENDING'">
+        <div class="avatar">{{ initials(r.userName) }}</div>
+
+        <div class="info">
+          <div class="title">
+            <strong>{{ r.userName ?? 'User #' + r.userId }}</strong>
+            @if (r.userBlocked) { <span class="pill danger">Banned</span> }
+            @if (reportsFor(r.userId) > 1) { <span class="pill warning">{{ reportsFor(r.userId) }} reports</span> }
+          </div>
+          <span class="muted">{{ r.userEmail }}</span>
+          <span class="muted small">
+            {{ r.areaName }} · Spot {{ r.spotNumber }} · reported {{ r.reportedAt | date: 'd MMM y, HH:mm' }}
+            @if (r.ticketCounterName) { by {{ r.ticketCounterName }} }
+          </span>
+          @if (r.note) { <q class="note">{{ r.note }}</q> }
+          @if (r.userBlocked && r.banReason) {
+            <p class="ban-reason"><strong>Ban reason:</strong> {{ r.banReason }}</p>
+          }
+          @if (r.status !== 'PENDING') {
+            <span class="muted small">
+              {{ r.status === 'BANNED' ? 'Banned' : 'Let go' }}
+              @if (r.resolvedByName) { by {{ r.resolvedByName }} }
+              @if (r.resolvedAt) { on {{ r.resolvedAt | date: 'd MMM y, HH:mm' }} }
+            </span>
+          }
+        </div>
+
+        <div class="side">
+          @if (r.amount !== null && r.currency) {
+            <span class="amount">{{ r.amount | currency: r.currency : 'code' : '1.0-3' }}</span>
+          }
+          <div class="actions">
+            @if (r.status === 'PENDING') {
+              <button class="secondary" (click)="dismiss(r)" [disabled]="busy === r.id">Let it go</button>
+              <button class="danger" (click)="openBan(r)" [disabled]="busy === r.id">Ban user</button>
+            } @else if (r.userBlocked) {
+              <button class="secondary" (click)="unban(r)" [disabled]="busy === r.id">Unban</button>
+            } @else if (r.status === 'DISMISSED') {
+              <button class="danger outline" (click)="openBan(r)" [disabled]="busy === r.id">Ban anyway</button>
+            }
+          </div>
+        </div>
+      </article>
+    } @empty {
+      <p class="empty">
+        {{ filter === 'PENDING' ? 'Nothing to review. 🎉' : 'No reports here.' }}
+      </p>
+    }
+  }
+
+  @if (confirmBan) {
+    <div class="backdrop" (click)="confirmBan = null">
+      <div class="dialog" (click)="$event.stopPropagation()">
+        <h3>Ban {{ confirmBan.userName }}?</h3>
+        <p class="muted">{{ confirmBan.userEmail }}</p>
+        <p>
+          The account is blocked: this user can no longer log in or reserve a spot.
+          @if (reportsFor(confirmBan.userId) > 1) {
+            Their other pending reports are closed too.
+          }
+          You can unban them later.
+        </p>
+        <label class="reason-label" for="ban-reason">Reason of the ban <span class="muted">(the user will see it)</span></label>
+        <textarea id="ban-reason" name="banReason" [(ngModel)]="banReason" maxlength="1000" rows="4"
+                  placeholder="e.g. You left the parking 3 times without paying."></textarea>
+        <div class="dialog-actions">
+          <button class="secondary" (click)="confirmBan = null">Cancel</button>
+          <button class="danger" (click)="ban(confirmBan)" [disabled]="!banReason.trim()">Ban user</button>
+        </div>
+      </div>
+    </div>
+  }
+</section>
