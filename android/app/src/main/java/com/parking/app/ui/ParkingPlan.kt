@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -45,7 +48,7 @@ import com.parking.app.contains
 import kotlin.math.min
 
 // Same colours as the web editor (frontend/src/app/layout-editor/plan-items.ts).
-private fun colorOf(kind: ItemKind, type: SpotType?): Color = when (kind) {
+internal fun colorOf(kind: ItemKind, type: SpotType?): Color = when (kind) {
     ItemKind.SPOT -> when (type) {
         SpotType.EV -> Color(0xFF16A34A)
         SpotType.HANDICAPPED -> Color(0xFF9333EA)
@@ -104,7 +107,7 @@ fun ParkingPlan(
     Box(
         modifier
             .clipToBounds()
-            .background(Color(0xFFE4E4E7))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .pointerInput(Unit) {
                 detectTransformGestures { centroid, panChange, zoomChange, _ ->
                     val newZoom = (zoom * zoomChange).coerceIn(1f, 8f)
@@ -207,14 +210,23 @@ fun PlanLegend(highlightLabel: String, modifier: Modifier = Modifier) {
         listOf("Taken" to TakenColor, highlightLabel to HighlightColor)
     Row(
         modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         for ((label, color) in entries) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(12.dp).background(color))
-                Text(label, Modifier.padding(start = 4.dp), style = MaterialTheme.typography.labelMedium)
+            Row(
+                Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(10.dp).clip(CircleShape).background(color))
+                Text(label, Modifier.padding(start = 6.dp), style = MaterialTheme.typography.labelMedium)
             }
         }
     }
 }
+
+/** Colour of a spot type, the same as on the plan. */
+fun spotColor(type: SpotType): Color = colorOf(ItemKind.SPOT, type)

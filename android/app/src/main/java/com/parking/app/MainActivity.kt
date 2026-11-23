@@ -4,11 +4,15 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import com.parking.app.ui.theme.ParkingTheme
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -29,7 +33,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
+            ParkingTheme {
                 ParkingApp()
             }
         }
@@ -40,7 +44,15 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun ParkingApp(vm: ParkingViewModel = viewModel()) {
     val nav = rememberNavController()
-    NavHost(nav, startDestination = "login") {
+    NavHost(
+        nav,
+        startDestination = "login",
+        modifier = Modifier.background(MaterialTheme.colorScheme.background),
+        enterTransition = { fadeIn(tween(280)) + slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(320)) { it / 5 } },
+        exitTransition = { fadeOut(tween(200)) },
+        popEnterTransition = { fadeIn(tween(280)) },
+        popExitTransition = { fadeOut(tween(200)) + slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(320)) { it / 5 } },
+    ) {
         composable("areas") {
             AreasScreen(
                 vm,
@@ -83,7 +95,8 @@ fun ParkingApp(vm: ParkingViewModel = viewModel()) {
         composable("login") {
             LoginScreen(
                 vm,
-                onBack = { nav.popBackStack() },
+                // Login is the start screen: only offer "back" when there is somewhere to go back to.
+                onBack = if (nav.previousBackStackEntry != null) ({ nav.popBackStack() }) else null,
                 onLoggedIn = {
                     nav.navigate("areas") {
                         popUpTo("login") { inclusive = true }
