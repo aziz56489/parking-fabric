@@ -3,9 +3,13 @@ package com.parking.entity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Entity
 @Getter
@@ -26,6 +30,11 @@ public class ParkingArea {
 
     private int capacity;
 
+    /** Hourly price of each spot, set by the admin in the layout editor. Spots not listed use the default price. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "spot_pricing", columnDefinition = "jsonb")
+    private List<SpotPrice> spotPricing = new ArrayList<>();
+
     @OneToMany(mappedBy = "parkingArea", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ParkingSpot> spots = new ArrayList<>();
 
@@ -45,5 +54,16 @@ public class ParkingArea {
                 .filter(spot -> spot.getStatus() == SpotStatus.RESERVED || spot.getStatus() == SpotStatus.OCCUPIED)
                 .count();
         return (double) taken / usable;
+    }
+
+    /** The price the admin set for this spot, if any. */
+    public Optional<BigDecimal> findSpotPrice(String spotNumber) {
+        if (spotPricing == null) {
+            return Optional.empty();
+        }
+        return spotPricing.stream()
+                .filter(price -> price.spotNumber().equals(spotNumber) && price.pricePerHour() != null)
+                .map(SpotPrice::pricePerHour)
+                .findFirst();
     }
 }

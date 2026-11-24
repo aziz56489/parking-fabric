@@ -3,7 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ActiveSelection, Canvas, FabricObject, Group } from 'fabric';
 import { ParkingService } from '../parking.service';
-import { Item, ItemKind, Layout, PaletteEntry, ParkingArea, ParkingSpot, SpotStatus, SpotType } from '../models';
+import { Item, ItemKind, Layout, PaletteEntry, ParkingArea, ParkingSpot, Pricing, SpotStatus, SpotType } from '../models';
 import { PIXELS_PER_METER, byLayer, createPlanObject, findOverlaps, readPlanObject, snapToHalfMeter } from './plan-items';
 import { GoogleMap, MapMarker, MapPolyline, MapRectangle } from '@angular/google-maps';
 
@@ -46,6 +46,7 @@ export class LayoutEditorComponent implements AfterViewInit, OnDestroy {
   };
 
   area: ParkingArea | null = null;
+  defaultPricing: Pricing | null = null;
   planWidth = 80;
   planHeight = 50;
   floors: Item[][] = [[]];
@@ -113,6 +114,10 @@ export class LayoutEditorComponent implements AfterViewInit, OnDestroy {
 
     const id = Number(this.route.snapshot.paramMap.get('id'));
     this.parkingService.getParkingArea(id).subscribe(area => this.load(area));
+    this.parkingService.getPricing().subscribe({
+      next: pricing => (this.defaultPricing = pricing),
+      error: () => (this.defaultPricing = null),
+    });
   }
 
   ngOnDestroy() {
@@ -315,6 +320,21 @@ export class LayoutEditorComponent implements AfterViewInit, OnDestroy {
       },
       error: err => this.showError(err),
     });
+  }
+
+  /** Empty input means the spot goes back to the default price. Saved with the layout. */
+  changePrice(value: string) {
+    const text = value.trim();
+    if (!text) {
+      this.changeSelected({ price: undefined });
+      return;
+    }
+    const price = Number(text);
+    if (!Number.isFinite(price) || price < 0) {
+      this.message = 'The price must be a positive number';
+      return;
+    }
+    this.changeSelected({ price: Math.round(price * 1000) / 1000 });
   }
 
   makeUnavailable() {
@@ -551,12 +571,13 @@ export class LayoutEditorComponent implements AfterViewInit, OnDestroy {
       height: this.planHeight,
       latitude: this.latitude,
       longitude: this.longitude,
-      floors: this.floors,
+      // Prices live in the spot_pricing column, so keep them out of the layout JSON.
+      floors: this.floors.map(items => items.map(({ price, ...item }) => item)),
     };
     const spots = this.floors
       .flat()
       .filter(item => item.kind === 'SPOT')
-      .map(item => ({ number: item.number ?? '', type: item.type ?? 'REGULAR' }));
+      .map(item => ({ number: item.number ?? '', type: item.type ?? 'REGULAR', pricePerHour: item.price }));
 
     this.parkingService.updateLayout(this.area.id, { layout: JSON.stringify(layout), spots }).subscribe({
       next: area => {
@@ -597,10 +618,14 @@ export class LayoutEditorComponent implements AfterViewInit, OnDestroy {
       ? `${this.latitude},${this.longitude}`
       : '';
     this.floors = layout?.floors ?? [[]];
+    const prices = new Map((area.spotPricing ?? []).map(entry => [entry.spotNumber, entry.pricePerHour]));
     for (const item of this.floors.flat()) {
       const saved = this.savedSpot(item);
       if (saved) {
         item.type = saved.type;
+      }
+      if (item.kind === 'SPOT' && item.number && prices.has(item.number)) {
+        item.price = prices.get(item.number);
       }
     }
     this.resizeCanvas();

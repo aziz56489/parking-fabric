@@ -1,0 +1,74 @@
+# Single entry point on port 8080: the Angular and Android clients keep their URL (http://localhost:8080/api/...).
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: gateway-service
+  config:
+    # Eureka, actuator and tracing settings are shared through the config server.
+    import: optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}
+  cloud:
+    gateway:
+      httpclient:
+        connect-timeout: 3000
+        response-timeout: 30s
+      # CORS for the Angular app: the gateway answers the browser's preflight (OPTIONS) requests itself,
+      # otherwise it rejects them with 403 and the browser reports "cannot reach the server".
+      globalcors:
+        add-to-simple-url-handler-mapping: true
+        cors-configurations:
+          '[/**]':
+            allowed-origins:
+              - http://localhost:4200
+              - http://127.0.0.1:4200
+            allowed-methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+            allowed-headers: [Content-Type, X-XSRF-TOKEN, Authorization]
+            allow-credentials: true
+            max-age: 3600
+      # The parking service adds its own CORS headers too: keep a single copy of each.
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Vary, RETAIN_FIRST
+      # Dynamic routes: every service registered in Eureka is also reachable as /<service-id>/**
+      # (e.g. /notification-service/actuator/circuitbreakers), without declaring it here.
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      # Declared routes. The first matching route wins, so the specific ones come first.
+      routes:
+        # lb:// = the address is looked up in Eureka and calls are load balanced between instances.
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/notifications/**,/api/notifications
+          filters:
+            - AddResponseHeader=X-Served-By, notification-service
+
+        # Static route to the service that is not written with Spring (Node.js / Express).
+        - id: billing-service
+          uri: ${BILLING_SERVICE_URL:http://localhost:3000}
+          predicates:
+            - Path=/api/billing/**
+          filters:
+            - AddResponseHeader=X-Served-By, billing-service
+
+        - id: parking-service
+          uri: lb://parking-service
+          predicates:
+            - Path=/api/**
+          filters:
+            - AddResponseHeader=X-Served-By, parking-service
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway,prometheus
+  endpoint:
+    gateway:
+      enabled: true
+
+logging:
+  level:
+    org.springframework.cloud.gateway: INFO

@@ -8,16 +8,110 @@ Fabric handles selecting, moving, resizing and rotating items with handles.
 Our code only creates the shapes, snaps them to the 0.5 m grid and reads their
 position back when the admin saves.
 
-## Run the backend
+## Backend architecture (microservices)
 
-Requires JDK 17 and Maven. From the repository root, run:
+```
+ Angular / Android / Postman                         Keycloak :8180 (realm "parking", OAuth2 tokens)
+          │  http://localhost:8080/api/...
+          ▼
+   gateway-service :8080 ── routes ──┬─ /api/notifications/** → lb://notification-service (Eureka)
+   (Spring Cloud Gateway)            ├─ /api/billing/**       → billing-service :3000 (static, Node/Express)
+                                     ├─ /api/**               → lb://parking-service  (Eureka)
+                                     └─ /<service-id>/**      → discovered dynamically in Eureka
+
+notification-service :8082 ──Feign + Resilience4j──▶ parking-service :8081 (backend/) ──▶ PostgreSQL (Supabase)
+          ▲                                                 │  └──RestClient──▶ Open-Meteo (external)
+          └───────── Kafka topic "reservation-events" ◀────┘
+
+config-server :8888 (configuration of every service)   eureka-server :8761 (registry)
+Prometheus :9090 (metrics) + Tempo :3200 (traces) ──▶ Grafana :3001 (dashboard "Parking - Microservices")
+```
+
+| Rubric item | Where | Postman folder |
+|---|---|---|
+| REST Spring Boot (JSON) | `backend/` controllers | 2 |
+| REST with another framework | `billing-service/` (Node.js / Express, tests: `npm test`) | 3 |
+| Registry (Eureka) | `eureka-server/`; clients: parking, notification, gateway | 4 |
+| Config server | `config-server/` (files in `src/main/resources/config/`), `GET /api/pricing`, `/actuator/refresh` | 5 |
+| Gateway | `gateway-service/src/main/resources/application.yml`: static, `lb://` and discovery routes | 6 |
+| Circuit breaker | `notification-service/.../client/ResilientParkingClient.java` (circuit breaker, retry, fallback) | 9 |
+| Synchronous communication | `notification-service/.../client/ParkingServiceClient.java` (OpenFeign) | 8 |
+| Asynchronous communication | `backend/.../event/ReservationEventPublisher.java` → `notification-service/.../kafka/ReservationEventListener.java` | 8 |
+| External service | `backend/.../external/WeatherClient.java` (RestClient → Open-Meteo), `GET /api/parking-areas/{id}/weather` | 7 |
+| Prometheus, Tempo, Grafana | `infra/prometheus`, `infra/tempo`, `infra/grafana` (datasources + dashboard provisioned) | 10 |
+| Keycloak | `infra/keycloak/parking-realm.json`: realm, roles, clients, users (imported on start) | 0 |
+| Security OAuth2 | `backend/.../config/SecurityConfig.java` + `KeycloakJwtConverter.java`, `notification-service/.../config/SecurityConfig.java` | 1 |
+| Docker deployment | `*/Dockerfile`, `docker-compose.yml` | all |
+
+### Keycloak
+
+Realm `parking`, imported from `infra/keycloak/parking-realm.json` on the first start:
+
+- Roles: `ADMIN`, `USER`, `TICKET_COUNTER`.
+- Clients: `parking-postman` (public, password grant and authorization code) and `parking-backend`
+  (confidential, client credentials, secret `parking-backend-secret`).
+- Users: `admin` / `admin123` (ADMIN), `counter` / `counter123` (TICKET_COUNTER), `driver` / `driver123` (USER).
+  Change these passwords outside a demo.
+
+Get a token: `POST http://localhost:8180/realms/parking/protocol/openid-connect/token` with
+`grant_type=password&client_id=parking-postman&username=driver&password=driver123`, then send
+`Authorization: Bearer <access_token>`.
+
+The parking service accepts both the existing session cookie (Angular, Android) and Keycloak tokens. A token is
+linked to the local account with the same e-mail (created on the first call), and its realm roles decide access.
+
+### Run everything with Docker
 
 ```powershell
-$env:ADMIN_PASSWORD = "choose-a-strong-admin-password"
-$env:DB_PASSWORD = "your-supabase-database-password"
-cd backend
-mvn spring-boot:run
+copy .env.example .env    # then set DB_PASSWORD in .env
+docker compose up --build -d
+docker compose ps         # wait until every service is running (about 2 minutes)
 ```
+
+| URL | |
+|---|---|
+| http://localhost:8080 | Gateway (API) |
+| http://localhost:8761 | Eureka dashboard |
+| http://localhost:8888/parking-service/default | Config server |
+| http://localhost:8180 | Keycloak (console: admin / admin) |
+| http://localhost:3001 | Grafana (admin / admin), dashboard "Parking - Microservices" |
+| http://localhost:9090 | Prometheus |
+
+Circuit breaker demo: `docker compose stop parking-service`, call
+`GET /api/notifications/reservations/1` a few times (fallback answer with `"fallback": true`), check
+`GET /notification-service/actuator/circuitbreakers` (state `OPEN`), then `docker compose start parking-service`:
+after 15 s the circuit goes half-open and closes again after 3 successful calls.
+
+Config refresh demo: edit `config-server/src/main/resources/config/parking-service.yml` (mounted in the
+container), then `POST /parking-service/actuator/refresh` with an admin token and `GET /api/pricing`.
+
+### Run without Docker
+
+Start the infrastructure with Docker (`docker compose up -d kafka keycloak tempo prometheus grafana`), then each
+service in its own terminal (JDK 17, Maven, Node 18+), in this order:
+
+```powershell
+cd config-server; mvn spring-boot:run           # 8888
+cd eureka-server; mvn spring-boot:run           # 8761
+$env:DB_PASSWORD = "your-supabase-database-password"
+cd backend; mvn spring-boot:run                 # parking-service, 8081
+cd notification-service; mvn spring-boot:run    # 8082
+cd billing-service; npm install; npm start      # 3000
+cd gateway-service; mvn spring-boot:run         # 8080
+```
+
+`mvn package -DskipTests` at the repository root builds every Spring service.
+If Kafka is down, reservations still work: the event is logged as not published.
+
+### Tests with Postman
+
+Import `postman/parking-microservices.postman_collection.json` and run it with the collection runner.
+Folder 0 stores the Keycloak tokens used by the other folders. Set `spotId` to an available spot before folder 8.
+
+## Run the backend alone
+
+The Angular and Android clients call port 8080, which is now the gateway: run at least the gateway with the
+backend (port 8081).
 
 On first startup, the backend creates the initial administrator using `ADMIN_EMAIL` (default `admin@parking.com`) and `ADMIN_PASSWORD`. If `ADMIN_PASSWORD` is unset, it skips admin creation; public registration always creates a regular user.
 

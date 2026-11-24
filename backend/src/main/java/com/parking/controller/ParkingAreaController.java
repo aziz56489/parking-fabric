@@ -3,6 +3,7 @@ package com.parking.controller;
 import com.parking.dto.ParkingRequests.CreateParkingAreaRequest;
 import com.parking.dto.ParkingRequests.LayoutRequest;
 import com.parking.entity.ParkingArea;
+import com.parking.external.WeatherService;
 import com.parking.service.ParkingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +19,7 @@ import java.util.List;
 public class ParkingAreaController {
 
     private final ParkingService parkingService;
+    private final WeatherService weatherService;
 
     @GetMapping
     public List<ParkingArea> getParkingAreas() {
@@ -27,6 +29,12 @@ public class ParkingAreaController {
     @GetMapping("/{id}")
     public ParkingArea getParkingArea(@PathVariable int id) {
         return parkingService.getParkingArea(id);
+    }
+
+    /** Current weather at the area, from the external Open-Meteo service. */
+    @GetMapping("/{id}/weather")
+    public WeatherService.AreaWeather getWeather(@PathVariable int id) {
+        return weatherService.getWeather(id);
     }
 
     @PostMapping

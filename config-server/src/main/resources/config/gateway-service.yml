@@ -1,0 +1,13 @@
+spring:
+  cloud:
+    gateway:
+      # Adds the X-Forwarded-* headers so the services build links with the gateway's address.
+      x-forwarded:
+        enabled: true
+
+# The gateway has no authentication: do not expose /actuator/refresh here.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics,gateway

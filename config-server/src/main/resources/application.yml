@@ -1,0 +1,24 @@
+server:
+  port: ${SERVER_PORT:8888}
+
+spring:
+  application:
+    name: config-server
+  profiles:
+    # "native" = the configuration files are read from a folder (no Git repository needed).
+    active: native
+  cloud:
+    config:
+      server:
+        native:
+          # In Docker the folder is mounted from the host, so a file can be edited without rebuilding.
+          search-locations: ${CONFIG_REPO:classpath:/config/}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: config-server

@@ -25,6 +25,7 @@ CREATE TABLE parking_area (
   name     VARCHAR(255) NOT NULL,
   layout   LONGTEXT,                               -- the editor's JSON plan
   capacity INT          NOT NULL DEFAULT 0,
+  spot_pricing JSON,                               -- [{"spotNumber":"A-01","pricePerHour":2.000}], admin-set prices per spot
   admin_id INT,
   PRIMARY KEY (id),
   UNIQUE KEY uk_parking_area_name (name),

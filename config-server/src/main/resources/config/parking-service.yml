@@ -1,0 +1,11 @@
+# Business settings of the parking service. Edit, then POST /actuator/refresh (admin token)
+# to reload GET /api/pricing without a restart.
+parking:
+  price-per-hour: "1.500"
+  currency: TND
+  pricing:
+    source: config-server (parking-service.yml)
+  kafka:
+    reservation-topic: reservation-events
+  weather:
+    base-url: https://api.open-meteo.com

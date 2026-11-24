@@ -7,11 +7,13 @@ import com.parking.entity.ParkingSpot;
 import com.parking.entity.Reservation;
 import com.parking.entity.SpotStatus;
 import com.parking.entity.User;
+import com.parking.event.ReservationEvent;
 import com.parking.repository.IssueReportRepository;
 import com.parking.repository.ParkingSpotRepository;
 import com.parking.repository.ReservationRepository;
 import com.parking.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,19 +31,22 @@ public class ReservationService {
     private final UserRepository userRepository;
     private final BigDecimal pricePerHour;
     private final String currency;
+    private final ApplicationEventPublisher events;
 
     public ReservationService(ReservationRepository reservationRepository,
                               ParkingSpotRepository parkingSpotRepository,
                               IssueReportRepository issueReportRepository,
                               UserRepository userRepository,
                               @Value("${parking.price-per-hour}") BigDecimal pricePerHour,
-                              @Value("${parking.currency}") String currency) {
+                              @Value("${parking.currency}") String currency,
+                              ApplicationEventPublisher events) {
         this.reservationRepository = reservationRepository;
         this.parkingSpotRepository = parkingSpotRepository;
         this.issueReportRepository = issueReportRepository;
         this.userRepository = userRepository;
         this.pricePerHour = pricePerHour;
         this.currency = currency;
+        this.events = events;
     }
 
     @Transactional
@@ -61,7 +66,17 @@ public class ReservationService {
         if (parkingSpotRepository.changeStatus(spot.getId(), SpotStatus.AVAILABLE, SpotStatus.RESERVED) == 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Spot " + spot.getNumber() + " is not available");
         }
-        return reservationRepository.save(new Reservation(request.userId(), spot, pricePerHour, currency));
+        Reservation reservation = reservationRepository.save(new Reservation(request.userId(), spot, priceOf(spot), currency));
+        // Sent to Kafka after commit by ReservationEventPublisher.
+        events.publishEvent(ReservationEvent.of(ReservationEvent.CREATED, reservation));
+        return reservation;
+    }
+
+    /** The price the admin set for this spot in the layout editor, or the default price. */
+    private BigDecimal priceOf(ParkingSpot spot) {
+        return spot.getParkingArea() == null
+                ? pricePerHour
+                : spot.getParkingArea().findSpotPrice(spot.getNumber()).orElse(pricePerHour);
     }
 
     private boolean isBlocked(String userId) {
@@ -87,6 +102,7 @@ public class ReservationService {
         Reservation reservation = getReservation(id);
         if (reservation.isActive()) {
             reservation.end();
+            events.publishEvent(ReservationEvent.of(ReservationEvent.ENDED, reservation));
             // An admin may have freed the spot and someone else reserved it since: leave it to them.
             if (!reservationRepository.existsBySpotIdAndEndedAtIsNull(reservation.getSpotId())) {
                 parkingSpotRepository.changeStatus(reservation.getSpotId(), SpotStatus.RESERVED, SpotStatus.AVAILABLE);

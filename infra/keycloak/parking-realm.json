@@ -1,0 +1,81 @@
+{
+  "realm": "parking",
+  "displayName": "Parking",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "accessTokenLifespan": 1800,
+  "roles": {
+    "realm": [
+      { "name": "ADMIN", "description": "Parking administrator: layouts, users, bans, reports" },
+      { "name": "USER", "description": "Driver: reservations and notifications" },
+      { "name": "TICKET_COUNTER", "description": "Ticket counter agent: reports non paying users" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "parking-postman",
+      "name": "Postman / tests",
+      "description": "Public client: password grant for Postman, authorization code for browsers.",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["https://oauth.pstmn.io/v1/callback", "http://localhost:4200/*"],
+      "webOrigins": ["http://localhost:4200"],
+      "attributes": { "pkce.code.challenge.method": "S256" }
+    },
+    {
+      "clientId": "parking-backend",
+      "name": "Service account",
+      "description": "Confidential client for machine-to-machine calls (client credentials).",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "parking-backend-secret",
+      "protocol": "openid-connect",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "email": "admin@parking.com",
+      "firstName": "System",
+      "lastName": "Administrator",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "admin123", "temporary": false }],
+      "realmRoles": ["ADMIN"]
+    },
+    {
+      "username": "counter",
+      "email": "counter@parking.com",
+      "firstName": "Ticket",
+      "lastName": "Counter",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "counter123", "temporary": false }],
+      "realmRoles": ["TICKET_COUNTER"]
+    },
+    {
+      "username": "driver",
+      "email": "driver@parking.com",
+      "firstName": "Demo",
+      "lastName": "Driver",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "driver123", "temporary": false }],
+      "realmRoles": ["USER"]
+    },
+    {
+      "username": "service-account-parking-backend",
+      "enabled": true,
+      "serviceAccountClientId": "parking-backend",
+      "realmRoles": ["USER"]
+    }
+  ]
+}

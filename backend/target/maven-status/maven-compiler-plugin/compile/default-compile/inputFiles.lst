@@ -1,8 +1,11 @@
+C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\config\KafkaTopicConfig.java
+C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\config\KeycloakJwtConverter.java
 C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\config\SecurityConfig.java
 C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\controller\AdminReportController.java
 C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\controller\AuthController.java
 C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\controller\ParkingAreaController.java
 C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\controller\ParkingSpotController.java
+C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\controller\PricingController.java
 C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\controller\ReservationController.java
 C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\controller\TicketCounterController.java
 C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\controller\UserController.java
@@ -21,9 +24,14 @@ C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\entity\Pa
 C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\entity\ReportStatus.java
 C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\entity\Reservation.java
 C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\entity\Role.java
+C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\entity\SpotPrice.java
 C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\entity\SpotStatus.java
 C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\entity\SpotType.java
 C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\entity\User.java
+C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\event\ReservationEvent.java
+C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\event\ReservationEventPublisher.java
+C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\external\WeatherClient.java
+C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\external\WeatherService.java
 C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\ParkingLayoutApplication.java
 C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\repository\BanAppealRepository.java
 C:\Users\user\Desktop\parking-fabric\backend\src\main\java\com\parking\repository\IssueReportRepository.java

@@ -1,0 +1,378 @@
+{
+  "info": {
+    "name": "Parking - Microservices",
+    "description": "Tests of every part of the architecture. Start the stack with `docker compose up --build -d`, then run the folders in order (Collection Runner). Folder 0 gets the Keycloak tokens used by the others.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "gateway", "value": "http://localhost:8080" },
+    { "key": "keycloak", "value": "http://localhost:8180" },
+    { "key": "eureka", "value": "http://localhost:8761" },
+    { "key": "config", "value": "http://localhost:8888" },
+    { "key": "billing", "value": "http://localhost:3000" },
+    { "key": "areaId", "value": "1" },
+    { "key": "spotId", "value": "1" },
+    { "key": "userId", "value": "" },
+    { "key": "reservationId", "value": "" },
+    { "key": "adminToken", "value": "" },
+    { "key": "driverToken", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "0. Keycloak (OAuth2 tokens)",
+      "item": [
+        {
+          "name": "0.1 Token admin (password grant)",
+          "request": {
+            "method": "POST",
+            "url": "{{keycloak}}/realms/parking/protocol/openid-connect/token",
+            "body": { "mode": "urlencoded", "urlencoded": [
+              { "key": "grant_type", "value": "password" },
+              { "key": "client_id", "value": "parking-postman" },
+              { "key": "username", "value": "admin" },
+              { "key": "password", "value": "admin123" }
+            ] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "const token = pm.response.json().access_token;",
+            "pm.collectionVariables.set('adminToken', token);",
+            "const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+            "pm.test('role ADMIN in the token', () => pm.expect(payload.realm_access.roles).to.include('ADMIN'));"
+          ] } }]
+        },
+        {
+          "name": "0.2 Token driver (password grant)",
+          "request": {
+            "method": "POST",
+            "url": "{{keycloak}}/realms/parking/protocol/openid-connect/token",
+            "body": { "mode": "urlencoded", "urlencoded": [
+              { "key": "grant_type", "value": "password" },
+              { "key": "client_id", "value": "parking-postman" },
+              { "key": "username", "value": "driver" },
+              { "key": "password", "value": "driver123" }
+            ] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "pm.collectionVariables.set('driverToken', pm.response.json().access_token);"
+          ] } }]
+        },
+        {
+          "name": "0.3 Token service account (client credentials)",
+          "request": {
+            "method": "POST",
+            "url": "{{keycloak}}/realms/parking/protocol/openid-connect/token",
+            "body": { "mode": "urlencoded", "urlencoded": [
+              { "key": "grant_type", "value": "client_credentials" },
+              { "key": "client_id", "value": "parking-backend" },
+              { "key": "client_secret", "value": "parking-backend-secret" }
+            ] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));"
+          ] } }]
+        },
+        {
+          "name": "0.4 Wrong password -> 401",
+          "request": {
+            "method": "POST",
+            "url": "{{keycloak}}/realms/parking/protocol/openid-connect/token",
+            "body": { "mode": "urlencoded", "urlencoded": [
+              { "key": "grant_type", "value": "password" },
+              { "key": "client_id", "value": "parking-postman" },
+              { "key": "username", "value": "driver" },
+              { "key": "password", "value": "wrong" }
+            ] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('401', () => pm.response.to.have.status(401));"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "1. Security OAuth2 (secured endpoints)",
+      "item": [
+        {
+          "name": "1.1 /api/auth/me with the driver token",
+          "request": { "method": "GET", "url": "{{gateway}}/api/auth/me", "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }] },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "pm.test('local account linked to Keycloak', () => pm.expect(pm.response.json().email).to.eql('driver@parking.com'));",
+            "pm.collectionVariables.set('userId', String(pm.response.json().id));"
+          ] } }]
+        },
+        {
+          "name": "1.2 /api/users without token -> 401",
+          "request": { "method": "GET", "url": "{{gateway}}/api/users" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('401', () => pm.response.to.have.status(401));"] } }]
+        },
+        {
+          "name": "1.3 /api/users with the driver token -> 403",
+          "request": { "method": "GET", "url": "{{gateway}}/api/users", "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }] },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('403', () => pm.response.to.have.status(403));"] } }]
+        },
+        {
+          "name": "1.4 /api/users with the admin token -> 200",
+          "request": { "method": "GET", "url": "{{gateway}}/api/users", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }] },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "1.5 Notifications without token -> 401",
+          "request": { "method": "GET", "url": "{{gateway}}/api/notifications" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('401', () => pm.response.to.have.status(401));"] } }]
+        },
+        {
+          "name": "1.6 Invalid token -> 401",
+          "request": { "method": "GET", "url": "{{gateway}}/api/users", "header": [{ "key": "Authorization", "value": "Bearer abc.def.ghi" }] },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('401', () => pm.response.to.have.status(401));"] } }]
+        }
+      ]
+    },
+    {
+      "name": "2. REST Spring Boot (JSON)",
+      "item": [
+        {
+          "name": "2.1 List parking areas",
+          "request": { "method": "GET", "url": "{{gateway}}/api/parking-areas" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 JSON array', () => { pm.response.to.have.status(200); pm.expect(pm.response.json()).to.be.an('array'); });"
+          ] } }]
+        },
+        {
+          "name": "2.2 Create a parking area (admin)",
+          "request": {
+            "method": "POST",
+            "url": "{{gateway}}/api/parking-areas",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Postman area {{$timestamp}}\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('201 + Location', () => { pm.response.to.have.status(201); pm.expect(pm.response.headers.get('Location')).to.include('/api/parking-areas/'); });"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "3. REST Express (billing-service, not Spring)",
+      "item": [
+        {
+          "name": "3.1 Tariffs through the gateway",
+          "request": { "method": "GET", "url": "{{gateway}}/api/billing/tariffs" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('served by billing-service', () => pm.expect(pm.response.headers.get('X-Served-By')).to.eql('billing-service'));",
+            "pm.test('4 tariffs', () => pm.expect(pm.response.json().length).to.be.at.least(1));"
+          ] } }]
+        },
+        {
+          "name": "3.2 Update the EV tariff (PUT)",
+          "request": {
+            "method": "PUT", "url": "{{billing}}/api/billing/tariffs/EV",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"pricePerHour\": 2.5,\n  \"freeMinutes\": 10\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('updated', () => pm.expect(pm.response.json().pricePerHour).to.eql(2.5));"
+          ] } }]
+        },
+        {
+          "name": "3.3 Quote a stay (POST JSON)",
+          "request": {
+            "method": "POST", "url": "{{gateway}}/api/billing/quote",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"spotType\": \"EV\",\n  \"minutes\": 70\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('60 billed minutes at 2.5 TND/h', () => pm.expect(pm.response.json().amount).to.eql(2.5));"
+          ] } }]
+        },
+        {
+          "name": "3.4 Invalid body -> 400",
+          "request": {
+            "method": "POST", "url": "{{gateway}}/api/billing/tariffs",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"spotType\": \"VIP\",\n  \"pricePerHour\": -1\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('400', () => pm.response.to.have.status(400));"] } }]
+        }
+      ]
+    },
+    {
+      "name": "4. Eureka (registry)",
+      "item": [
+        {
+          "name": "4.1 Registered applications",
+          "request": { "method": "GET", "url": "{{eureka}}/eureka/apps", "header": [{ "key": "Accept", "value": "application/json" }] },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const names = pm.response.json().applications.application.map(a => a.name);",
+            "pm.test('3 services registered', () => pm.expect(names).to.include.members(['PARKING-SERVICE', 'NOTIFICATION-SERVICE', 'GATEWAY-SERVICE']));"
+          ] } }]
+        },
+        {
+          "name": "4.2 Instances of parking-service",
+          "request": { "method": "GET", "url": "{{eureka}}/eureka/apps/PARKING-SERVICE", "header": [{ "key": "Accept", "value": "application/json" }] },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] } }]
+        }
+      ]
+    },
+    {
+      "name": "5. Config server",
+      "item": [
+        {
+          "name": "5.1 Configuration of parking-service",
+          "request": { "method": "GET", "url": "{{config}}/parking-service/default" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('parking-service.yml served', () => pm.expect(pm.response.json().propertySources.map(p => p.name).join()).to.include('parking-service.yml'));"
+          ] } }]
+        },
+        {
+          "name": "5.2 Value used by the client (GET /api/pricing)",
+          "request": { "method": "GET", "url": "{{gateway}}/api/pricing" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('read from the config server', () => pm.expect(pm.response.json().source).to.include('config-server'));"
+          ] } }]
+        },
+        {
+          "name": "5.3 Reload after editing parking-service.yml (admin)",
+          "request": { "method": "POST", "url": "{{gateway}}/parking-service/actuator/refresh", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }] },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] } }]
+        }
+      ]
+    },
+    {
+      "name": "6. Gateway (static and dynamic routes)",
+      "item": [
+        {
+          "name": "6.1 Declared routes",
+          "request": { "method": "GET", "url": "{{gateway}}/actuator/gateway/routes" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const ids = pm.response.json().map(r => r.route_id);",
+            "pm.test('static + lb routes', () => pm.expect(ids).to.include.members(['parking-service', 'notification-service', 'billing-service']));"
+          ] } }]
+        },
+        {
+          "name": "6.2 Dynamic route from Eureka (/notification-service/**)",
+          "request": { "method": "GET", "url": "{{gateway}}/notification-service/actuator/health" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "6.3 /api/** goes to parking-service",
+          "request": { "method": "GET", "url": "{{gateway}}/api/parking-areas" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('X-Served-By', () => pm.expect(pm.response.headers.get('X-Served-By')).to.eql('parking-service'));"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "7. External service (Open-Meteo)",
+      "item": [
+        {
+          "name": "7.1 Weather at a parking area",
+          "request": { "method": "GET", "url": "{{gateway}}/api/parking-areas/{{areaId}}/weather" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 from open-meteo', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().source).to.eql('open-meteo.com'); });"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "8. Kafka (asynchronous) + Feign (synchronous)",
+      "item": [
+        {
+          "name": "8.1 Reserve a spot (publishes RESERVATION_CREATED)",
+          "request": {
+            "method": "POST", "url": "{{gateway}}/api/reservations",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"spotId\": {{spotId}},\n  \"userId\": \"{{userId}}\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('201', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('reservationId', pm.response.json().id);",
+            "setTimeout(() => {}, 2000); // let the notification service consume the event"
+          ] } }]
+        },
+        {
+          "name": "8.2 Reservation read with Feign",
+          "request": { "method": "GET", "url": "{{gateway}}/api/notifications/reservations/{{reservationId}}", "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }] },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('same reservation, not a fallback', () => { const r = pm.response.json(); pm.expect(r.id).to.eql(Number(pm.collectionVariables.get('reservationId'))); pm.expect(r.fallback).to.be.false; });"
+          ] } }]
+        },
+        {
+          "name": "8.3 Notification built from the Kafka event",
+          "request": { "method": "GET", "url": "{{gateway}}/api/notifications?userId={{userId}}", "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }] },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const id = Number(pm.collectionVariables.get('reservationId'));",
+            "pm.test('RESERVATION_CREATED received', () => pm.expect(pm.response.json().some(n => n.reservationId === id && n.type === 'RESERVATION_CREATED')).to.be.true);"
+          ] } }]
+        },
+        {
+          "name": "8.4 Exit (publishes RESERVATION_ENDED)",
+          "request": { "method": "POST", "url": "{{gateway}}/api/reservations/{{reservationId}}/exit" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('ended', () => pm.expect(pm.response.json().endedAt).to.not.be.null);",
+            "setTimeout(() => {}, 2000);"
+          ] } }]
+        },
+        {
+          "name": "8.5 Notification after exit (amount)",
+          "request": { "method": "GET", "url": "{{gateway}}/api/notifications?userId={{userId}}", "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }] },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const id = Number(pm.collectionVariables.get('reservationId'));",
+            "pm.test('RESERVATION_ENDED received', () => pm.expect(pm.response.json().some(n => n.reservationId === id && n.type === 'RESERVATION_ENDED')).to.be.true);"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "9. Circuit breaker (run `docker compose stop parking-service` first)",
+      "item": [
+        {
+          "name": "9.1 Feign call while parking-service is down -> fallback",
+          "request": { "method": "GET", "url": "{{gateway}}/api/notifications/reservations/1", "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }] },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 with fallback: true', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().fallback).to.be.true; });"
+          ] } }]
+        },
+        {
+          "name": "9.2 Circuit breaker state (OPEN after 5 failures)",
+          "request": { "method": "GET", "url": "{{gateway}}/notification-service/actuator/circuitbreakers" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "console.log(pm.response.json().circuitBreakers.parkingService);",
+            "pm.test('state reported', () => pm.expect(pm.response.json().circuitBreakers.parkingService.state).to.be.oneOf(['CLOSED', 'OPEN', 'HALF_OPEN']));"
+          ] } }]
+        },
+        {
+          "name": "9.3 Circuit breaker events",
+          "request": { "method": "GET", "url": "{{gateway}}/notification-service/actuator/circuitbreakerevents/parkingService" }
+        }
+      ]
+    },
+    {
+      "name": "10. Observability",
+      "item": [
+        {
+          "name": "10.1 Prometheus targets",
+          "request": { "method": "GET", "url": "http://localhost:9090/api/v1/targets?state=active" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const down = pm.response.json().data.activeTargets.filter(t => t.health !== 'up').map(t => t.labels.job);",
+            "pm.test('every target is up', () => pm.expect(down).to.eql([]));"
+          ] } }]
+        },
+        {
+          "name": "10.2 Metrics of parking-service",
+          "request": { "method": "GET", "url": "{{gateway}}/parking-service/actuator/prometheus" }
+        },
+        {
+          "name": "10.3 Traces in Tempo (search)",
+          "request": { "method": "GET", "url": "http://localhost:3200/api/search?tags=service.name%3Dgateway-service&limit=5" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('traces found', () => pm.expect(pm.response.json().traces.length).to.be.above(0));"
+          ] } }]
+        }
+      ]
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { LayoutRequest, ParkingArea, ParkingSpot, SpotUpdateRequest } from './models';
+import { LayoutRequest, ParkingArea, ParkingSpot, Pricing, SpotUpdateRequest } from './models';
 
 @Injectable({ providedIn: 'root' })
 export class ParkingService {
@@ -25,5 +25,10 @@ export class ParkingService {
 
   updateParkingSpot(spotId: number, changes: SpotUpdateRequest) {
     return this.http.patch<ParkingSpot>(`${this.api}/parking-spots/${spotId}`, changes);
+  }
+
+  /** Default price, used by spots without their own price. */
+  getPricing() {
+    return this.http.get<Pricing>(`${this.api}/pricing`);
   }
 }

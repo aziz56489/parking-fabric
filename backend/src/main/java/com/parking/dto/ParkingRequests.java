@@ -4,6 +4,7 @@ import com.parking.entity.IssueType;
 import com.parking.entity.SpotStatus;
 import com.parking.entity.SpotType;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 public final class ParkingRequests {
@@ -16,7 +17,8 @@ public final class ParkingRequests {
 
     public record LayoutRequest(String layout, List<Spot> spots) {
 
-        public record Spot(String number, SpotType type) {
+        /** {@code pricePerHour} is optional: without it the spot uses the default price. */
+        public record Spot(String number, SpotType type, BigDecimal pricePerHour) {
         }
     }
 

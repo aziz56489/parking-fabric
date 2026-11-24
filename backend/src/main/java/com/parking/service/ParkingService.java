@@ -4,6 +4,7 @@ import com.parking.dto.ParkingRequests.LayoutRequest;
 import com.parking.dto.ParkingRequests.SpotUpdateRequest;
 import com.parking.entity.ParkingArea;
 import com.parking.entity.ParkingSpot;
+import com.parking.entity.SpotPrice;
 import com.parking.entity.SpotStatus;
 import com.parking.entity.SpotType;
 import com.parking.repository.ParkingAreaRepository;
@@ -14,6 +15,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,8 +61,16 @@ public class ParkingService {
 
         ParkingArea area = getParkingArea(areaId);
         Map<String, SpotType> requestedSpots = new HashMap<>();
+        List<SpotPrice> spotPricing = new ArrayList<>();
         for (LayoutRequest.Spot spot : request.spots()) {
             requestedSpots.put(spot.number(), spot.type());
+            if (spot.pricePerHour() != null) {
+                if (spot.pricePerHour().compareTo(BigDecimal.ZERO) < 0) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "The price of spot " + spot.number() + " cannot be negative");
+                }
+                spotPricing.add(new SpotPrice(spot.number(), spot.pricePerHour()));
+            }
         }
 
         for (ParkingSpot spot : List.copyOf(area.getSpots())) {
@@ -83,6 +94,7 @@ public class ParkingService {
         });
 
         area.setLayout(request.layout());
+        area.setSpotPricing(spotPricing);
         area.setCapacity(area.getSpots().size());
         return area;
     }

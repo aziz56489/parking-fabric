@@ -1,0 +1,219 @@
+# Parking backend as microservices.
+#   copy .env.example .env      (then set DB_PASSWORD)
+#   docker compose up --build -d
+#
+# Entry points on the host:
+#   Gateway (API)        http://localhost:8080/api/...
+#   Eureka dashboard     http://localhost:8761
+#   Config server        http://localhost:8888/parking-service/default
+#   Keycloak             http://localhost:8180   (admin console: admin / KEYCLOAK_ADMIN_PASSWORD)
+#   Grafana              http://localhost:3001   (admin / GRAFANA_ADMIN_PASSWORD)
+#   Prometheus           http://localhost:9090
+#   Billing (Express)    http://localhost:3000/api/billing/tariffs  (also through the gateway)
+name: parking
+
+# Settings shared by the Spring Boot services.
+x-spring-service: &spring-service
+  restart: unless-stopped
+  environment: &spring-env
+    CONFIG_SERVER_URL: http://config-server:8888
+    EUREKA_URL: http://eureka-server:8761/eureka/
+    # Same values as the config server, set here too: when Docker restarts the containers (e.g. after
+    # Docker Desktop restarts) depends_on is ignored, and a service started before the config server
+    # would otherwise register with Eureka on localhost and be unreachable from the gateway.
+    EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+    EUREKA_INSTANCE_PREFERIPADDRESS: "true"
+    OTLP_TRACING_URL: http://tempo:4318/v1/traces
+    KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    # Tokens are issued for http://localhost:8180 (what Postman uses); keys are read inside the network.
+    KEYCLOAK_ISSUER_URI: http://localhost:8180/realms/parking
+    KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/parking/protocol/openid-connect/certs
+    JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75 -XX:+UseSerialGC
+  deploy:
+    resources:
+      limits:
+        memory: 512m
+  depends_on: &spring-depends
+    config-server:
+      condition: service_healthy
+    eureka-server:
+      condition: service_healthy
+
+services:
+  # ---------- Infrastructure ----------
+  kafka:
+    image: apache/kafka:3.8.0
+    container_name: kafka
+    restart: unless-stopped
+    ports:
+      - "9092:9092"   # for services started outside Docker (mvn spring-boot:run)
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:29092,CONTROLLER://:29093,PLAINTEXT_HOST://:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0.6
+    container_name: keycloak
+    restart: unless-stopped
+    # Imports infra/keycloak/parking-realm.json (realm, roles, clients, users) on the first start.
+    command: ["start-dev", "--import-realm"]
+    ports:
+      - "8180:8080"
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      # Same issuer ("iss") for tokens requested from the host or from the containers.
+      KC_HOSTNAME: http://localhost:8180
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - ./infra/keycloak/parking-realm.json:/opt/keycloak/data/import/parking-realm.json:ro
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: tempo
+    restart: unless-stopped
+    user: "0"   # writes its blocks to /var/tempo
+    command: ["-config.file=/etc/tempo.yaml"]
+    ports:
+      - "3200:3200"   # Tempo API
+      - "4318:4318"   # OTLP HTTP, for services started outside Docker
+    volumes:
+      - ./infra/tempo/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --enable-feature=exemplar-storage      # trace ids attached to the latency metrics
+      - --web.enable-remote-write-receiver     # service graph metrics written by Tempo
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  grafana:
+    image: grafana/grafana:11.2.2
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_FEATURE_TOGGLES_ENABLE: traceqlEditor
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - tempo
+
+  # ---------- Spring Cloud infrastructure ----------
+  config-server:
+    build: ./config-server
+    container_name: config-server
+    restart: unless-stopped
+    ports:
+      - "8888:8888"
+    environment:
+      # The configuration folder is mounted: edit a file, then POST /actuator/refresh on the service.
+      CONFIG_REPO: file:/config/
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75 -XX:+UseSerialGC
+    volumes:
+      - ./config-server/src/main/resources/config:/config:ro
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8888'"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  eureka-server:
+    build: ./eureka-server
+    container_name: eureka-server
+    restart: unless-stopped
+    ports:
+      - "8761:8761"
+    environment:
+      EUREKA_HOSTNAME: eureka-server
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=75 -XX:+UseSerialGC
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8761'"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  # ---------- Business services ----------
+  parking-service:
+    <<: *spring-service
+    build: ./backend
+    container_name: parking-service
+    environment:
+      <<: *spring-env
+      SERVER_PORT: 8081
+      DB_URL: ${DB_URL}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    depends_on:
+      <<: *spring-depends
+      kafka:
+        condition: service_healthy
+
+  notification-service:
+    <<: *spring-service
+    build: ./notification-service
+    container_name: notification-service
+    environment:
+      <<: *spring-env
+      SERVER_PORT: 8082
+    depends_on:
+      <<: *spring-depends
+      kafka:
+        condition: service_healthy
+
+  billing-service:
+    build: ./billing-service
+    container_name: billing-service
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+
+  gateway-service:
+    <<: *spring-service
+    build: ./gateway-service
+    container_name: gateway-service
+    ports:
+      - "8080:8080"
+    environment:
+      <<: *spring-env
+      SERVER_PORT: 8080
+      BILLING_SERVICE_URL: http://billing-service:3000
+    depends_on:
+      <<: *spring-depends
+      billing-service:
+        condition: service_started
+
+volumes:
+  tempo-data:
