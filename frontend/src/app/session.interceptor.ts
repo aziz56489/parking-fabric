@@ -1,6 +1,7 @@
 import { HttpInterceptorFn } from '@angular/common/http';
 
-const API_ORIGIN = 'http://localhost:8080';
+// The API is served from the same origin: through nginx in production, through proxy.conf.json with ng serve.
+const API_PREFIX = '/api/';
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE']);
 
 function csrfCookie(): string | null {
@@ -12,7 +13,7 @@ function csrfCookie(): string | null {
 }
 
 export const sessionInterceptor: HttpInterceptorFn = (request, next) => {
-  if (!request.url.startsWith(`${API_ORIGIN}/api/`)) return next(request);
+  if (!request.url.startsWith(API_PREFIX)) return next(request);
 
   let outgoing = request.clone({ withCredentials: true });
   if (!SAFE_METHODS.has(request.method.toUpperCase())) {

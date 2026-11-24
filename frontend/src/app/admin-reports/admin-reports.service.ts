@@ -47,7 +47,7 @@ export interface EntryStats {
 @Injectable({ providedIn: 'root' })
 export class AdminReportsService {
   private http = inject(HttpClient);
-  private api = 'http://localhost:8080/api';
+  private api = '/api';
 
   getReports() {
     return this.http.get<NonPayingReport[]>(`${this.api}/admin/non-paying-reports`);

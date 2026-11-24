@@ -13,4 +13,6 @@ RUN useradd --system --uid 1001 spring
 USER spring
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8888
+# Keep the JVM inside the container memory limit (Railway, Docker).
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+UseSerialGC"
 ENTRYPOINT ["java", "-jar", "app.jar"]

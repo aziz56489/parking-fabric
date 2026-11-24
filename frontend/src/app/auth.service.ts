@@ -18,7 +18,7 @@ export interface LoginRequest {
 }
 
 const STORAGE_KEY = 'parking_admin_user';
-const API_BASE = 'http://localhost:8080/api';
+const API_BASE = '/api';
 
 /** Accounts allowed in this web app. Drivers (USER) use the mobile app. */
 const STAFF_ROLES = ['ADMIN', 'TICKET_COUNTER'];

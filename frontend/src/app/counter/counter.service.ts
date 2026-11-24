@@ -45,7 +45,7 @@ export interface NonPayingReport {
 @Injectable({ providedIn: 'root' })
 export class CounterService {
   private http = inject(HttpClient);
-  private api = 'http://localhost:8080/api';
+  private api = '/api';
 
   getReservations() {
     return this.http.get<CounterReservation[]>(`${this.api}/counter/reservations`);

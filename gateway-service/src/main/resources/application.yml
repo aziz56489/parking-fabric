@@ -1,6 +1,6 @@
 # Single entry point on port 8080: the Angular and Android clients keep their URL (http://localhost:8080/api/...).
 server:
-  port: ${SERVER_PORT:8080}
+  port: ${PORT:${SERVER_PORT:8080}}
 
 spring:
   application:
@@ -19,9 +19,8 @@ spring:
         add-to-simple-url-handler-mapping: true
         cors-configurations:
           '[/**]':
-            allowed-origins:
-              - http://localhost:4200
-              - http://127.0.0.1:4200
+            # Comma separated. Add the deployed front end's URL only if it is served from another domain.
+            allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200,http://127.0.0.1:4200}
             allowed-methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
             allowed-headers: [Content-Type, X-XSRF-TOKEN, Authorization]
             allow-credentials: true
@@ -33,13 +32,14 @@ spring:
       # (e.g. /notification-service/actuator/circuitbreakers), without declaring it here.
       discovery:
         locator:
-          enabled: true
+          enabled: ${EUREKA_ENABLED:true}
           lower-case-service-id: true
       # Declared routes. The first matching route wins, so the specific ones come first.
       routes:
         # lb:// = the address is looked up in Eureka and calls are load balanced between instances.
         - id: notification-service
-          uri: lb://notification-service
+          # Without Eureka (Railway): NOTIFICATION_SERVICE_URL=http://notification-service.railway.internal:8082
+          uri: ${NOTIFICATION_SERVICE_URL:lb://notification-service}
           predicates:
             - Path=/api/notifications/**,/api/notifications
           filters:
@@ -54,11 +54,17 @@ spring:
             - AddResponseHeader=X-Served-By, billing-service
 
         - id: parking-service
-          uri: lb://parking-service
+          # Without Eureka (Railway): PARKING_SERVICE_URL=http://parking-service.railway.internal:8081
+          uri: ${PARKING_SERVICE_URL:lb://parking-service}
           predicates:
             - Path=/api/**
           filters:
             - AddResponseHeader=X-Served-By, parking-service
+
+eureka:
+  client:
+    # Set EUREKA_ENABLED=false where no Eureka server runs (e.g. Railway) and use the *_SERVICE_URL variables.
+    enabled: ${EUREKA_ENABLED:true}
 
 management:
   endpoints:

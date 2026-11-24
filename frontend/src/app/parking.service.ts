@@ -5,7 +5,7 @@ import { LayoutRequest, ParkingArea, ParkingSpot, Pricing, SpotUpdateRequest } f
 @Injectable({ providedIn: 'root' })
 export class ParkingService {
   private http = inject(HttpClient);
-  private api = 'http://localhost:8080/api';
+  private api = '/api';
 
   getParkingAreas() {
     return this.http.get<ParkingArea[]>(`${this.api}/parking-areas`);

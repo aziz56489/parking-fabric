@@ -126,10 +126,44 @@ npm start
 ```
 
 Open http://localhost:4200, create a parking area, then click "Edit layout".
+`ng serve` forwards `/api` to the gateway on http://localhost:8080 (`frontend/proxy.conf.json`), so the
+app calls a relative `/api` URL both locally and when deployed.
 
 ## Run the Android app
 
 The Android emulator uses `http://10.0.2.2:8080/api/` to reach the backend on the host machine. For a physical device, set `api.url` in `android/local.properties` to the host computer's LAN address, for example `http://192.168.1.20:8080/api/`, and keep the phone and computer on the same network.
+
+## Deploy on Railway
+
+The repository root is only a Maven aggregator (it builds no jar). **Do not deploy the root.** Railway then
+runs `java -jar target/*jar` and crashes with "Unable to access jarfile target/*jar". Create one Railway
+service per folder from the same GitHub repo. For each service, in **Settings**:
+
+- set **Root Directory** to the folder (e.g. `/backend`), so Railway builds that folder's `Dockerfile`;
+- set **Config file path** to `/<folder>/railway.json` (health check and restart policy).
+
+Railway sets `PORT`; every service listens on it. Use the service names below so the internal URLs match
+(`<name>.railway.internal`).
+
+| Railway service | Root Directory | Variables |
+|---|---|---|
+| `parking-service` | `/backend` | `DB_PASSWORD`, `ADMIN_PASSWORD`, `PORT=8081`, `EUREKA_ENABLED=false`, `KAFKA_ENABLED=false` (optional: `DB_URL`, `DB_USERNAME`) |
+| `billing-service` | `/billing-service` | `PORT=3000` |
+| `gateway-service` | `/gateway-service` | `PORT=8080`, `EUREKA_ENABLED=false`, `PARKING_SERVICE_URL=http://parking-service.railway.internal:8081`, `BILLING_SERVICE_URL=http://billing-service.railway.internal:3000` |
+| `frontend` | `/frontend` | `API_URL=http://gateway-service.railway.internal:8080` |
+
+Generate a public domain (Settings → Networking) for **`frontend` only**. nginx serves the Angular app and
+forwards `/api` to the gateway, so the browser sees a single origin and the session and XSRF cookies work.
+To give the Android app a public API, also generate a domain for `gateway-service` and set
+`api.url=https://<gateway-domain>/api/` in `android/local.properties`.
+
+Optional services (the core works without them): `notification-service` (`EUREKA_ENABLED=false`,
+`PARKING_SERVICE_URL=...`, `KAFKA_BOOTSTRAP_SERVERS`), a Kafka broker (then drop `KAFKA_ENABLED=false` on the
+parking service and set `KAFKA_BOOTSTRAP_SERVERS`), and Keycloak (`KEYCLOAK_ISSUER_URI`,
+`KEYCLOAK_JWK_SET_URI`). The session login used by Angular and Android does not need Keycloak.
+
+The Supabase session pooler accepts 15 clients in total. Each backend instance uses at most `DB_POOL_SIZE`
+(default 5) connections, so a redeploy (old and new instance running together) stays under the limit.
 
 ## REST API
 
